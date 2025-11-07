@@ -1,0 +1,369 @@
+openapi: 3.0.1
+info:
+  title: Default module
+  description: ''
+  version: 1.0.0
+tags: []
+paths:
+  /api/v1/reservation/possibility/{concert_id}/dates:
+    get:
+      summary: /reservation/possibility/{concert_id}/dates
+      deprecated: false
+      description: 특정 콘서트의 예약가능한 날짜목록을 조회하는 api입니다.
+      tags: []
+      parameters:
+        - name: concert_id
+          in: path
+          description: 특정 콘서트 ID
+          required: true
+          example: 1
+          schema:
+            type: number
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties: {}
+            examples: {}
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  List<reservationDates>:
+                    type: array
+                    items:
+                      type: string
+                      description: 예약가능한 날 데이터
+                    description: 예약가능한 날 데이터 list 형식
+                required:
+                  - List<reservationDates>
+          headers: {}
+      security: []
+  /api/v1/reservation/possibility/{concert_id}/{date}/place:
+    get:
+      summary: /reservation/possibility/{concert_id}/{date}/place
+      deprecated: false
+      description: 특정 콘서트의 특정일에 예약가능한 좌석 조회 API
+      tags: []
+      parameters:
+        - name: concert_id
+          in: path
+          description: 특정 콘서트의 ID입니다.
+          required: true
+          example: 1
+          schema:
+            type: number
+        - name: date
+          in: path
+          description: 예약할 날 입니다.
+          required: true
+          example: '20251011'
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  List<place>:
+                    type: array
+                    items:
+                      type: object
+                      properties: {}
+                      description: 예약가능한 자리의 vo입니다.
+                    description: 예약가능한 자리의 list형식입니다.
+                required:
+                  - List<place>
+          headers: {}
+      security: []
+  /api/v1/reservation/dates/place:
+    post:
+      summary: /reservation/dates/place
+      deprecated: false
+      description: 특정 콘서트의 특정 날짜의 좌석을 예약한다.
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                concertId:
+                  type: number
+                  description: 콘서트의 ID
+                  example: 1
+                date:
+                  description: 예약할 날짜
+                  example: '20251110'
+                  type: string
+                place:
+                  type: string
+                  description: 예약할 좌석
+                  example: '1'
+              required:
+                - concertId
+                - date
+                - place
+            examples: {}
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reservation:
+                    type: string
+                    description: 예약 상태
+                  payment:
+                    type: string
+                    description: 결제 상태
+                  reservationTime:
+                    type: string
+                    description: 예약시간
+                required:
+                  - reservation
+                  - payment
+                  - reservationTime
+          headers: {}
+      security: []
+  /api/v1/user/charge:
+    post:
+      summary: /user/charge
+      deprecated: false
+      description: 유저가 포인트 충전을 진행합니다.
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                userId:
+                  description: 유저id
+                  example: USER251100001
+                  type: string
+                point:
+                  type: number
+                  description: 충전할금액
+                  example: 100000
+              required:
+                - userId
+                - point
+            examples: {}
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+          headers: {}
+      security: []
+  /api/v1/{userid}/point-list:
+    get:
+      summary: /user/point-list
+      deprecated: false
+      description: 유저의 현재 사용가능한 금액 조회 api
+      tags: []
+      parameters:
+        - name: userid
+          in: path
+          description: 유저id
+          required: true
+          example: USER251100001
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  point:
+                    type: number
+                    description: 사용가능한 포인트
+                required:
+                  - point
+          headers: {}
+      security: []
+  /api/v1/user/payment:
+    post:
+      summary: /user/payment
+      deprecated: false
+      description: 사용자의 결제 요청 api
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                userId:
+                  description: 유저id
+                  example: USER251100001
+                  type: string
+                point:
+                  type: number
+                  description: 결제요청금액
+                  example: 100000
+              required:
+                - userId
+                - point
+            examples: {}
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+          headers: {}
+      security: []
+  /api/v1/user/queue/token:
+    post:
+      summary: /queue/token
+      deprecated: false
+      description: 회원의 토큰을 요청하는 api입니다.
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                userId:
+                  description: 회원ID
+                  example: USER251100001
+                  type: string
+              required:
+                - userId
+            examples: {}
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: UUID 형태
+                  queuePosition:
+                    type: string
+                    description: 현재 대기 순번
+                  estimatedWaitTime:
+                    type: string
+                    description: 대기소요시간(초)
+                  status:
+                    type: string
+                    description: 현재상태
+                required:
+                  - token
+                  - queuePosition
+                  - estimatedWaitTime
+                  - status
+          headers: {}
+      security: []
+  /api/v1/user/queue/status/{token}:
+    get:
+      summary: /user/queue/status
+      deprecated: false
+      description: 클라이언트(웹/앱)가 주기적으로 자신의 대기 상태를 확인하는 API
+      tags: []
+      parameters:
+        - name: token
+          in: path
+          description: token
+          required: true
+          example: '123123'
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties: {}
+            examples: {}
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queuePosition:
+                    type: number
+                    description: 현재 순번
+                  estimatedWaitTime:
+                    type: number
+                    description: 대기열 예상 시간
+                  status:
+                    type: string
+                    description: 현재 상태
+                required:
+                  - queuePosition
+                  - estimatedWaitTime
+                  - status
+          headers: {}
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                title: ''
+                type: object
+                properties: {}
+                description: 잘못된 요청입니다.
+          headers: {}
+        '401':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+                description: 사용자 인증 실패
+          headers: {}
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                title: ''
+                type: object
+                properties: {}
+                description: 권한 없음
+          headers: {}
+      security: []
+components:
+  schemas: {}
+  securitySchemes: {}
+servers: []
+security: []
