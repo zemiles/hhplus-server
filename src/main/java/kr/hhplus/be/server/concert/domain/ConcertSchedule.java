@@ -10,19 +10,21 @@ import java.util.Date;
 public class ConcertSchedule extends CommonEntity {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@Column(name = "concert_scheduled_id")
 	private Long concertScheduleId;
 
-	@Column
+	@Column(name = "concert_date")
 	private String concertDate;
 
-	@Column
+	@Column(name = "concert_time")
 	private String concertTime;
 
-	@Column
+	@Column(name = "concert_price")
 	private BigDecimal concertPrice;
-	
-	/*
-	* 콘서트 ID도 같이 넣기
-	* */
+
+	@ManyToOne
+	@JoinColumn(name = "concert_id")
+	private Concert concertId;
+
 	
 }

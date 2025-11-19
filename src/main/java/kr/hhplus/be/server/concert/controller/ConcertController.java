@@ -16,8 +16,8 @@ public class ConcertController {
 	}
 
 	@GetMapping("/{concert_id}/dates")
-	public ConcertListResponse getConcerts(@PathVariable Integer concert_id) {
-		return new ConcertListResponse();
+	public ConcertListResponse getConcerts(@PathVariable int concert_id) {
+		return concertService.getConcerts(concert_id);
 	}
 
 }
