@@ -1,11 +1,12 @@
 package kr.hhplus.be.server.concert.domain;
 
 import jakarta.persistence.*;
+import kr.hhplus.be.server.common.domain.CommonEntity;
 import kr.hhplus.be.server.concert.common.SeatGrade;
 import kr.hhplus.be.server.concert.common.SeatStatus;
 
 @Entity
-public class Seat {
+public class Seat extends CommonEntity {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
