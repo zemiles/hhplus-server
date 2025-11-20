@@ -1,8 +1,7 @@
 package kr.hhplus.be.server.concert.controller;
 
-import kr.hhplus.be.server.concert.dto.ConcertListResponse;
+import kr.hhplus.be.server.concert.dto.ConcertResponse;
 import kr.hhplus.be.server.concert.service.ConcertService;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -16,7 +15,7 @@ public class ConcertController {
 	}
 
 	@GetMapping("/{concert_id}/dates")
-	public ConcertListResponse getConcerts(@PathVariable int concert_id) {
+	public ConcertResponse getConcerts(@PathVariable Long concert_id) {
 		return concertService.getConcerts(concert_id);
 	}
 

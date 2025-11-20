@@ -1,7 +1,9 @@
 package kr.hhplus.be.server.concert.common;
 
 import lombok.AllArgsConstructor;
+import lombok.Getter;
 
+@Getter
 @AllArgsConstructor
 public enum SeatGrade {
 	VIP("1", "VIP좌석"),

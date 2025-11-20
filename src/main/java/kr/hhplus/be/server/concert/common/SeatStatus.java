@@ -1,7 +1,9 @@
 package kr.hhplus.be.server.concert.common;
 
 import lombok.AllArgsConstructor;
+import lombok.Getter;
 
+@Getter
 @AllArgsConstructor
 public enum SeatStatus {
 	RESERVATION("1", "예약중"),

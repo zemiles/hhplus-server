@@ -1,9 +1,15 @@
 package kr.hhplus.be.server.concert.service;
 
-import kr.hhplus.be.server.concert.dto.ConcertListResponse;
+import ch.qos.logback.classic.spi.IThrowableProxy;
+import kr.hhplus.be.server.concert.domain.Concert;
+import kr.hhplus.be.server.concert.dto.ConcertResponse;
 import kr.hhplus.be.server.concert.repository.ConcertRepository;
+import kr.hhplus.be.server.concert.repository.ConcertScheduleRepository;
+import kr.hhplus.be.server.concert.repository.SeatRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.util.Optional;
 
 @Service
 @AllArgsConstructor
@@ -11,11 +17,21 @@ public class ConcertService {
 
 	private final ConcertRepository concertRepository;
 
+	private final ConcertScheduleRepository concertScheduleRepository;
+
+	private final SeatRepository seatRepository;
+
 	/*
 	* todo
 	* 예약가능한 상태를 조회하는거라서 ConcertId를 가지고 ConcertScheduleID를 조회해서 현재 예약 가능한 좌석이 있는 날짜를 리턴해주면 된다.
 	* */
-	public ConcertListResponse getConcerts(int concertId){
+	public ConcertResponse getConcerts(Long concertId){
+		ConcertResponse concertResponse = new ConcertResponse();
+
+		Concert concert = concertRepository.findById(concertId)
+							.orElseThrow(() -> new RuntimeException("concert를 찾을수 없습니다."));
+
+
 		return null;
 	}
 

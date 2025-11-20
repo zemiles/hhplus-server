@@ -2,6 +2,7 @@ package kr.hhplus.be.server.point.domain;
 
 import jakarta.persistence.*;
 import kr.hhplus.be.server.common.domain.CommonEntity;
+import kr.hhplus.be.server.point.common.UserStatus;
 
 @Entity
 public class User extends CommonEntity {
@@ -19,5 +20,12 @@ public class User extends CommonEntity {
 
 	@Column(name = "user_name")
 	private String userName;
+
+	@Column(name = "user_status")
+	private UserStatus userStatus;
+
+	@OneToOne
+	@JoinColumn(name = "wallet_id")
+	private Wallet walletId;
 
 }

@@ -4,8 +4,12 @@ import jakarta.persistence.*;
 import kr.hhplus.be.server.common.domain.CommonEntity;
 import kr.hhplus.be.server.concert.common.SeatGrade;
 import kr.hhplus.be.server.concert.common.SeatStatus;
+import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 
 @Entity
+@AllArgsConstructor
+@RequiredArgsConstructor
 public class Seat extends CommonEntity {
 
 	@Id
@@ -16,9 +20,11 @@ public class Seat extends CommonEntity {
 	private int seatNumber;
 
 	@Column(name = "seat_grade")
+	@Enumerated(EnumType.ORDINAL)
 	private SeatGrade seatGrade;
 
 	@Column(name = "seat_status")
+	@Enumerated(EnumType.ORDINAL)
 	private SeatStatus seatStatus;
 
 	@ManyToOne
