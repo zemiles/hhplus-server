@@ -8,12 +8,11 @@ import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 
 @Entity
-@AllArgsConstructor
-@RequiredArgsConstructor
 public class Seat extends CommonEntity {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@Column(name = "seat_id")
 	private Long seatId;
 
 	@Column(name = "seat_number")
@@ -31,4 +30,13 @@ public class Seat extends CommonEntity {
 	@JoinColumn(name = "concert_schedule_id")
 	private ConcertSchedule concertSchedule;
 
+	public Seat() {}
+
+	public Seat(Long seatId, int seatNumber, SeatGrade seatGrade, SeatStatus seatStatus, ConcertSchedule concertSchedule) {
+		this.seatId = seatId;
+		this.seatNumber = seatNumber;
+		this.seatGrade = seatGrade;
+		this.seatStatus = seatStatus;
+		this.concertSchedule = concertSchedule;
+	}
 }

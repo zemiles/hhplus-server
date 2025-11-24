@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
-@AllArgsConstructor
 public enum SeatGrade {
 	VIP("1", "VIP좌석"),
 	ROYAL("2", "R석"),
@@ -14,4 +13,9 @@ public enum SeatGrade {
 
 	private String code;
 	private String dec;
+
+	SeatGrade(String code, String dec) {
+		this.code = code;
+		this.dec = dec;
+	}
 }

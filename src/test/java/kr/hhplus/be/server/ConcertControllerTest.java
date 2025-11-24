@@ -36,14 +36,16 @@ class ConcertControllerTest {
 		ConcertSchedule concertSchedule = new ConcertSchedule(1L, "20251225", "180000", new BigDecimal(80000), concert);
 		Seat seat = new Seat(1L, 1, SeatGrade.VIP, SeatStatus.NON_RESERVATION, concertSchedule);
 
+
+
 		when(concertRepository.findById(1L)).thenReturn(Optional.of(concert));
 
-		ConcertResponse concerts = concertService.getConcerts(concertId);
+		ConcertResponse concertResponse = concertService.getConcerts(concertId);
 
 
-		assertThat(concerts).isNotNull();
-		assertThat(concerts.getConcertId()).isEqualTo(1L);
-		assertThat(concerts.getConcertName()).isEqualTo("아이유 콘서트");
+		assertThat(concertResponse).isNotNull();
+		assertThat(concertResponse.getConcertId()).isEqualTo(1L);
+		assertThat(concertResponse.getConcertName()).isEqualTo("아이유 콘서트");
 
 	}
 

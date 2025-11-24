@@ -3,12 +3,12 @@ package kr.hhplus.be.server.concert.domain;
 import jakarta.persistence.*;
 import kr.hhplus.be.server.common.domain.CommonEntity;
 import kr.hhplus.be.server.concert.common.ConcertStatus;
-import lombok.AllArgsConstructor;
-import lombok.RequiredArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
 
+@Getter
+@Setter
 @Entity
-@AllArgsConstructor
-@RequiredArgsConstructor
 public class Concert extends CommonEntity {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,4 +24,17 @@ public class Concert extends CommonEntity {
 	@Column(name = "concert_status")
 	@Enumerated(EnumType.ORDINAL)
 	private ConcertStatus concertStatus;
+
+	public Concert() {}
+
+	public Concert(Long id,
+	        String concertName,
+	        String concertDec,
+	        ConcertStatus concertStatus) {
+		this.id = id;
+		this.concertName = concertName;
+		this.concertDec = concertDec;
+		this.concertStatus = concertStatus;
+	}
+
 }

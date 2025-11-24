@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
-@AllArgsConstructor
 public enum UserStatus {
 	NORMAL("1", "사용중"),
 	STOP("2", "중지");
@@ -12,4 +11,8 @@ public enum UserStatus {
 	private String code;
 	private String dec;
 
+	UserStatus(String code, String dec) {
+		this.code = code;
+		this.dec = dec;
+	}
 }

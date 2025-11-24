@@ -2,15 +2,14 @@ package kr.hhplus.be.server.concert.domain;
 
 import jakarta.persistence.*;
 import kr.hhplus.be.server.common.domain.CommonEntity;
-import lombok.AllArgsConstructor;
-import lombok.RequiredArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.math.BigDecimal;
-import java.util.Date;
 
+@Getter
+@Setter
 @Entity
-@AllArgsConstructor
-@RequiredArgsConstructor
 public class ConcertSchedule extends CommonEntity {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,5 +27,16 @@ public class ConcertSchedule extends CommonEntity {
 
 	@ManyToOne
 	@JoinColumn(name = "concert_id")
-	private Concert concertId;
+	private Concert concert;
+
+	public ConcertSchedule() {}
+
+	public ConcertSchedule(Long concertScheduleId, String concertDate, String concertTime, BigDecimal concertPrice, Concert concert) {
+		this.concertScheduleId = concertScheduleId;
+		this.concertDate = concertDate;
+		this.concertTime = concertTime;
+		this.concertPrice = concertPrice;
+		this.concert = concert;
+	}
+
 }
