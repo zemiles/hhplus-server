@@ -4,10 +4,13 @@ import jakarta.persistence.*;
 import kr.hhplus.be.server.common.domain.CommonEntity;
 import kr.hhplus.be.server.concert.common.SeatGrade;
 import kr.hhplus.be.server.concert.common.SeatStatus;
-import lombok.AllArgsConstructor;
-import lombok.RequiredArgsConstructor;
+import lombok.*;
 
 @Entity
+@Getter
+@Setter
+@Table(name = "seat")
+@NoArgsConstructor
 public class Seat extends CommonEntity {
 
 	@Id
@@ -29,14 +32,4 @@ public class Seat extends CommonEntity {
 	@ManyToOne
 	@JoinColumn(name = "concert_schedule_id")
 	private ConcertSchedule concertSchedule;
-
-	public Seat() {}
-
-	public Seat(Long seatId, int seatNumber, SeatGrade seatGrade, SeatStatus seatStatus, ConcertSchedule concertSchedule) {
-		this.seatId = seatId;
-		this.seatNumber = seatNumber;
-		this.seatGrade = seatGrade;
-		this.seatStatus = seatStatus;
-		this.concertSchedule = concertSchedule;
-	}
 }

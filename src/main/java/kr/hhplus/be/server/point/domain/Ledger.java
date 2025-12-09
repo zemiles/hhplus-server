@@ -2,10 +2,17 @@ package kr.hhplus.be.server.point.domain;
 
 import jakarta.persistence.*;
 import kr.hhplus.be.server.common.domain.CommonEntity;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 
 @Entity
+@Table(name = "ledger")
+@Getter
+@Setter
+@NoArgsConstructor
 public class Ledger extends CommonEntity {
 
 	@Id
