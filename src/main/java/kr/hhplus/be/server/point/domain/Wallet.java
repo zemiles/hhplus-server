@@ -2,8 +2,15 @@ package kr.hhplus.be.server.point.domain;
 
 import jakarta.persistence.*;
 import kr.hhplus.be.server.common.domain.CommonEntity;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
+@Table(name = "wallet")
+@Getter
+@Setter
+@NoArgsConstructor
 public class Wallet extends CommonEntity {
 
 	@Id
