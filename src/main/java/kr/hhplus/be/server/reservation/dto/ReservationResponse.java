@@ -25,7 +25,7 @@ public class ReservationResponse extends CommonResponse {
 		reservationResponse.setStatus(reservation.getStatus().name());
 		reservationResponse.setAmountCents(reservation.getAmountCents());
 		reservationResponse.setHoldExpiresAt(reservation.getHoldExpiresAt() != null
-		? reservationResponse.getHoldExpiresAt()
+		? reservation.getHoldExpiresAt().toString()
 				: null);
 
 		return reservationResponse;

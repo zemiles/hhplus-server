@@ -67,7 +67,7 @@ public class ProcessPaymentUseCase {
 		// 5. 잔액 확인
 		BigDecimal currentBalance = walletRepositoryPort.getBalance(wallet.getId());
 		if(currentBalance.compareTo(reservation.getAmountCents()) < 0 ) {
-			throw new IllegalStateException(String.format("잔액이 부족합니다. 현재 %b원, 필요 : %b원", currentBalance, reservation.getAmountCents()));
+			throw new IllegalStateException(String.format("잔액이 부족합니다. 현재 %s원, 필요 : %s원", currentBalance, reservation.getAmountCents()));
 		}
 
 		// 6. 잔액 차감
