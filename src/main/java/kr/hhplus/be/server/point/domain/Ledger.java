@@ -33,5 +33,8 @@ public class Ledger extends CommonEntity {
 	@JoinColumn(name = "wallet_id")
 	private Wallet wallet;
 
+	@Column(name = "type", nullable = false)
+	@Enumerated(EnumType.ORDINAL)
+	private LedgerType type;
 
 }

@@ -4,6 +4,8 @@ import kr.hhplus.be.server.concert.dto.ConcertResponse;
 import kr.hhplus.be.server.concert.service.ConcertService;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/reservation/possibility")
 public class ConcertController {
@@ -15,7 +17,7 @@ public class ConcertController {
 	}
 
 	@GetMapping("/{concert_id}/dates")
-	public ConcertResponse getConcerts(@PathVariable Long concert_id) {
+	public List<ConcertResponse> getConcerts(@PathVariable Long concert_id) {
 		return concertService.getConcerts(concert_id);
 	}
 

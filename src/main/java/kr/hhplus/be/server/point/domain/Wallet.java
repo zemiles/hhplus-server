@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "wallet")
 @Getter
@@ -21,5 +23,11 @@ public class Wallet extends CommonEntity {
 	@OneToOne
 	@JoinColumn(name = "user_id")
 	private User user;
+
+	@Column(name = "balance_cents", nullable = false)
+	private BigDecimal balanceCents;
+
+	@Column(name = "currency", length = 3, nullable = false)
+	private String currency = "KRW";
 
 }

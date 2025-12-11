@@ -20,6 +20,17 @@ spring:
     properties:
       hibernate.timezone.default_storage: NORMALIZE_UTC
       hibernate.jdbc.time_zone: UTC
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:  # 로컬은 비밀번호 없음
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
 
 ---
 spring.config.activate.on-profile: local, test
@@ -39,6 +50,11 @@ spring:
     properties:
       hibernate:
         format_sql: true  # SQL 포맷팅
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
 
 ---
 spring.config.activate.on-profile: h2
@@ -49,6 +65,10 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  data:
+    redis:
+      host: localhost
+      port: 6379
   h2:
     console:
       enabled: true

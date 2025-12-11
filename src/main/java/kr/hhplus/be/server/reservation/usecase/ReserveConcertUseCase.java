@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.IllformedLocaleException;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -66,9 +65,8 @@ public class ReserveConcertUseCase {
 		reservation.setHoldExpiresAt(LocalDateTime.now().plusMinutes(HOLD_DURATION_MINUTES));
 
 		// 가격 계산 (센트 단위)
-		long priceInCents = seat.getConcertSchedule().getConcertPrice()
-				.multiply(new BigDecimal(100))
-				.longValue();
+		BigDecimal priceInCents = seat.getConcertSchedule().getConcertPrice()
+				.multiply(new BigDecimal(100));
 
 		reservation.setAmountCents(priceInCents);
 

@@ -67,7 +67,7 @@ public class ProcessPaymentUseCase {
 		// 5. 잔액 확인
 		BigDecimal currentBalance = walletRepositoryPort.getBalance(wallet.getId());
 		if(currentBalance.compareTo(reservation.getAmountCents()) < 0 ) {
-			throw new IllegalStateException(String.format("잔액이 부족합니다. 현재 %b원, 필요 : %b원", currentBalance, reservation.getAmountCents()));
+			throw new IllegalStateException(String.format("잔액이 부족합니다. 현재 %s원, 필요 : %s원", currentBalance, reservation.getAmountCents()));
 		}
 
 		// 6. 잔액 차감
@@ -92,7 +92,7 @@ public class ProcessPaymentUseCase {
 		Ledger ledger = new Ledger();
 		ledger.setWallet(wallet);
 		ledger.setAmount(reservation.getAmountCents());
-
+		ledger.setType(kr.hhplus.be.server.point.domain.LedgerType.PAYMENT); // 결제 타입 설정
 		ledger.setChargeDate(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")));
 		ledger.setChargeTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmmss")));
 		ledgerRepositoryPort.save(ledger);
