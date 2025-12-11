@@ -92,7 +92,7 @@ public class ProcessPaymentUseCase {
 		Ledger ledger = new Ledger();
 		ledger.setWallet(wallet);
 		ledger.setAmount(reservation.getAmountCents());
-
+		ledger.setType(kr.hhplus.be.server.point.domain.LedgerType.PAYMENT); // 결제 타입 설정
 		ledger.setChargeDate(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")));
 		ledger.setChargeTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmmss")));
 		ledgerRepositoryPort.save(ledger);
