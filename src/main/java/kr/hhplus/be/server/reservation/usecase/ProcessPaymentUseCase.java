@@ -3,6 +3,7 @@ package kr.hhplus.be.server.reservation.usecase;
 import jakarta.transaction.Transactional;
 import kr.hhplus.be.server.point.domain.Ledger;
 import kr.hhplus.be.server.point.domain.Wallet;
+import kr.hhplus.be.server.point.repository.WalletRepository;
 import kr.hhplus.be.server.reservation.domain.Payment;
 import kr.hhplus.be.server.reservation.domain.PaymentStatus;
 import kr.hhplus.be.server.reservation.domain.Reservation;
@@ -27,6 +28,7 @@ public class ProcessPaymentUseCase {
 	private final PaymentRepositoryPort paymentRepositoryPort;
 	private final WalletRepositoryPort walletRepositoryPort;
 	private final LedgerRepositoryPort ledgerRepositoryPort;
+	private final WalletRepository walletRepository;
 
 	/**
 	 * 예약 결제 처리
@@ -65,9 +67,16 @@ public class ProcessPaymentUseCase {
 				.orElseThrow(() -> new IllegalArgumentException("지갑을 찾을 수 없습니다. userId : " + reservationId));
 
 		// 5. 잔액 확인
-		BigDecimal currentBalance = walletRepositoryPort.getBalance(wallet.getId());
-		if(currentBalance.compareTo(reservation.getAmountCents()) < 0 ) {
-			throw new IllegalStateException(String.format("잔액이 부족합니다. 현재 %s원, 필요 : %s원", currentBalance, reservation.getAmountCents()));
+		boolean deducted = walletRepositoryPort.deductBalanceIfSufficient(
+				wallet.getId(),
+				reservation.getAmountCents()
+		);
+
+		if(!deducted) {
+			// 차감 실패 = 잔액 부족
+			BigDecimal currentBalance = walletRepositoryPort.getBalance(wallet.getId());
+			throw new IllegalStateException(String.format("잔액이 부족합니다. 현재 %s원, 필요 : %s원",
+					currentBalance, reservation.getAmountCents()));
 		}
 
 		// 6. 잔액 차감
