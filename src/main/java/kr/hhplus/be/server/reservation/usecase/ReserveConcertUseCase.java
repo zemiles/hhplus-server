@@ -1,6 +1,7 @@
 package kr.hhplus.be.server.reservation.usecase;
 
 import jakarta.transaction.Transactional;
+import kr.hhplus.be.server.concert.common.SeatStatus;
 import kr.hhplus.be.server.concert.domain.Seat;
 import kr.hhplus.be.server.reservation.domain.Payment;
 import kr.hhplus.be.server.reservation.domain.Reservation;
@@ -43,11 +44,11 @@ public class ReserveConcertUseCase {
 		}
 
 		// 2. 좌석 조회
-		Seat seat = seatRepositoryPort.findById(seatId)
+		Seat seat = seatRepositoryPort.findByIdWithLock(seatId)
 				.orElseThrow(() -> new IllegalArgumentException("좌석을 찾을 수 없습니다. seatId: " + seatId));
 
 		// 3. 좌석 사용 가능 여부 확인
-		if(!seatRepositoryPort.isSeatAvailable(seatId)) {
+		if(seat.getSeatStatus() != SeatStatus.NON_RESERVATION) {
 			throw new IllegalArgumentException("이미 예약된 좌석입니다. seatId : " + seatId);
 		}
 
