@@ -7,6 +7,8 @@ import kr.hhplus.be.server.reservation.repository.ReservationJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -33,5 +35,15 @@ public class ReservationRepositoryAdapter implements ReservationRepositoryPort {
 	@Override
 	public boolean existsBySeatIdAndStatus(Long seatId, ReservationStatus reservationStatus) {
 		return reservationJpaRepository.existsBySeatIdAndStatus(seatId, reservationStatus);
+	}
+
+	@Override
+	public List<Reservation> findExpiredReservations(ReservationStatus status, LocalDateTime now) {
+		return reservationJpaRepository.findExpiredReservations(status, now);
+	}
+
+	@Override
+	public int expireReservations(ReservationStatus oldStatus, ReservationStatus newStatus, LocalDateTime now) {
+		return reservationJpaRepository.expireReservations(oldStatus, newStatus, now);
 	}
 }

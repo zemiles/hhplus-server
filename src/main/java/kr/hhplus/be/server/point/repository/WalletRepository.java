@@ -21,4 +21,9 @@ public interface WalletRepository extends JpaRepository<Wallet, Long> {
 	@Modifying
 	@Query("UPDATE Wallet w SET w.balanceCents = w.balanceCents - :amount WHERE w.id = :walletId")
 	void deductBalance(@Param("walletId") Long walletId, @Param("amount") BigDecimal amount);
+
+	@Modifying
+	@Query("UPDATE Wallet w SET w.balanceCents = w.balanceCents - :amount " +
+			"WHERE w.id = :walletId AND w.balanceCents >= :amount")
+	int deductBalanceIfSufficient(@Param("walletId") Long walletId, @Param("amount") BigDecimal amount);
 }

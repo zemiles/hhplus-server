@@ -28,6 +28,12 @@ public class WalletRepositoryAdapter implements WalletRepositoryPort {
 	}
 
 	@Override
+	public boolean deductBalanceIfSufficient(Long walletId, BigDecimal amount) {
+		int updatedRows = walletRepository.deductBalanceIfSufficient(walletId, amount);
+		return updatedRows > 0; // 1이면 성공, 0이면 실패
+	}
+
+	@Override
 	public BigDecimal getBalance(Long walletId) {
 		return walletRepository.getBalance(walletId);
 	}

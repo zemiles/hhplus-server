@@ -8,6 +8,7 @@ import java.util.Optional;
 @Repository
 public interface SeatRepositoryPort {
 	Optional<Seat> findById(Long seatId);
+	Optional<Seat> findByIdWithLock(Long seatId);
 	Seat save(Seat seat);
 	boolean isSeatAvailable(Long seatId);
 }

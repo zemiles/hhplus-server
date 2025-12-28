@@ -10,5 +10,6 @@ import java.util.Optional;
 public interface WalletRepositoryPort {
 	Optional<Wallet> findByUserId(Long userId);
 	void deductBalance(Long walletId, BigDecimal amount);
+	boolean deductBalanceIfSufficient(Long walletId, BigDecimal amount);
 	BigDecimal getBalance(Long walletId);
 }
