@@ -85,4 +85,8 @@ tasks.named<Delete>("clean") {
 tasks.withType<Test> {
 	useJUnitPlatform()
 	systemProperty("user.timezone", "UTC")
+	// 윈도우 환경에서 인코딩 문제 방지
+	systemProperty("file.encoding", "UTF-8")
+	// 윈도우 환경에서 콘솔 출력 인코딩 설정
+	outputs.upToDateWhen { false }
 }

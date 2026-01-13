@@ -4,6 +4,8 @@ import kr.hhplus.be.server.reservation.domain.Reservation;
 import kr.hhplus.be.server.reservation.domain.ReservationStatus;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -13,4 +15,7 @@ public interface ReservationRepositoryPort {
 	Optional<Reservation> findByIdempotencyKey(String idempotencyKey);
 	boolean existsBySeatIdAndStatus(Long seatId, ReservationStatus reservationStatus);
 
+	List<Reservation> findExpiredReservations(ReservationStatus status, LocalDateTime now);
+
+	int expireReservations(ReservationStatus oldStatus, ReservationStatus newStatus, LocalDateTime now);
 }

@@ -21,6 +21,11 @@ public class SeatRepositoryAdapter implements SeatRepositoryPort {
 	}
 
 	@Override
+	public Optional<Seat> findByIdWithLock(Long seatId) {
+		return seatRepository.findByIdWithLock(seatId);
+	}
+
+	@Override
 	public Seat save(Seat seat) {
 		return seatRepository.save(seat);
 	}
