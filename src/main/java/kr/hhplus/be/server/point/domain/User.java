@@ -3,8 +3,15 @@ package kr.hhplus.be.server.point.domain;
 import jakarta.persistence.*;
 import kr.hhplus.be.server.common.domain.CommonEntity;
 import kr.hhplus.be.server.point.common.UserStatus;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
+@Table(name = "users") // H2에서 user는 예약어이므로 users로 변경
+@Getter
+@Setter
+@NoArgsConstructor
 public class User extends CommonEntity {
 
 	@Id

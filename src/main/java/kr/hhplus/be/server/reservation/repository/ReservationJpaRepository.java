@@ -27,7 +27,7 @@ public interface ReservationJpaRepository extends JpaRepository<Reservation, Lon
 			);
 
 	@Modifying
-	@Query("UPDATE Reservation r SET r.status = :newStatus" +
+	@Query("UPDATE Reservation r SET r.status = :newStatus " +
 		"WHERE r.status = :oldStatus AND r.holdExpiresAt < :now")
 		int expireReservations(@Param("oldStatus") ReservationStatus oldStatus,
 		                       @Param("newStatus") ReservationStatus newStatus,
