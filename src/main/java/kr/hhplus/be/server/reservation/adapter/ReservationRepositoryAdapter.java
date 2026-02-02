@@ -46,4 +46,9 @@ public class ReservationRepositoryAdapter implements ReservationRepositoryPort {
 	public int expireReservations(ReservationStatus oldStatus, ReservationStatus newStatus, LocalDateTime now) {
 		return reservationJpaRepository.expireReservations(oldStatus, newStatus, now);
 	}
+
+	@Override
+	public long countByConcertScheduleIdAndStatus(Long concertScheduleId, ReservationStatus status) {
+		return reservationJpaRepository.countByConcertScheduleIdAndStatus(concertScheduleId, status);
+	}
 }

@@ -36,4 +36,9 @@ public class SeatRepositoryAdapter implements SeatRepositoryPort {
 				.map(seat -> seat.getSeatStatus() == SeatStatus.NON_RESERVATION)
 				.orElse(false);
 	}
+
+	@Override
+	public long countByConcertScheduleId(Long concertScheduleId) {
+		return seatRepository.countByConcertScheduleId(concertScheduleId);
+	}
 }

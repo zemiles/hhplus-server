@@ -8,11 +8,15 @@ import kr.hhplus.be.server.point.domain.Wallet;
 import kr.hhplus.be.server.reservation.domain.Payment;
 import kr.hhplus.be.server.reservation.domain.PaymentStatus;
 import kr.hhplus.be.server.reservation.domain.Reservation;
+import kr.hhplus.be.server.ranking.service.ConcertRankingService;
+import kr.hhplus.be.server.reservation.domain.ReservationStatus;
 import kr.hhplus.be.server.reservation.port.LedgerRepositoryPort;
 import kr.hhplus.be.server.reservation.port.PaymentRepositoryPort;
 import kr.hhplus.be.server.reservation.port.ReservationRepositoryPort;
+import kr.hhplus.be.server.reservation.port.SeatRepositoryPort;
 import kr.hhplus.be.server.reservation.port.WalletRepositoryPort;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -21,6 +25,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ProcessPaymentUseCase {
@@ -29,6 +34,8 @@ public class ProcessPaymentUseCase {
 	private final PaymentRepositoryPort paymentRepositoryPort;
 	private final WalletRepositoryPort walletRepositoryPort;
 	private final LedgerRepositoryPort ledgerRepositoryPort;
+	private final SeatRepositoryPort seatRepositoryPort;
+	private final ConcertRankingService concertRankingService;
 	private final DistributedLockService distributedLockService;
 	private final PlatformTransactionManager transactionManager;
 	
@@ -80,33 +87,39 @@ public class ProcessPaymentUseCase {
 	 * @return 처리된 결제 정보
 	 */
 	private Payment executeInternal(Long reservationId, String idempotencyKey) {
-		// 1. 예약 조회
+		// 1. 멱등성 체크 (가장 먼저 수행 - 잔액 차감 전에 중복 요청을 방지)
+		// 멱등성 키가 null이면 UUID를 생성하지만, 이는 멱등성을 보장하지 않으므로
+		// 실제 운영 환경에서는 idempotencyKey를 필수로 받아야 합니다.
+		String finalIdempotencyKey = idempotencyKey != null ? idempotencyKey : UUID.randomUUID().toString();
+		Optional<Payment> existingPayment = paymentRepositoryPort.findByIdempotencyKey(finalIdempotencyKey);
+		if(existingPayment.isPresent()) {
+			// 이미 존재하는 결제 반환 (멱등성 보장)
+			return existingPayment.get();
+		}
+
+		// 2. 예약 조회
 		Reservation reservation = reservationRepositoryPort.findById(reservationId)
 				.orElseThrow(() -> new IllegalArgumentException("예약을 찾을 수 없습니다. reservationId : " + reservationId));
 
-		// 2. 결제 가능 여부 확인 (비즈니스 로직)
+		// 3. 결제 가능 여부 확인 (비즈니스 로직)
 		if (!reservation.canBePaid()) {
 			if (reservation.isExpired()) {
-				reservation.markAsExpired();
-				reservationRepositoryPort.save(reservation);
+				// 예약 만료 처리
+				// 주의: 예외를 던지면 트랜잭션이 롤백되므로 상태 업데이트가 의미가 없습니다.
+				// 만료 상태를 저장하려면 별도의 트랜잭션에서 처리하거나 예외를 던지지 않아야 합니다.
+				// 현재는 예외를 던지므로 상태 업데이트는 제거합니다.
 				throw new IllegalArgumentException("예약이 만료되었습니다. reservationId : " + reservationId);
 			}
 			throw new IllegalStateException("결제할 수 없는 예약입니다. reservationId : " + reservationId);
 		}
 
-		// 3. 멱등성 체크(같은 결제 요청이 중복으로 들어오면 기존 결제 반환)
-		if (idempotencyKey != null) {
-			Optional<Payment> byIdempotencyKey = paymentRepositoryPort.findByIdempotencyKey(idempotencyKey);
-			if(byIdempotencyKey.isPresent()) {
-				return byIdempotencyKey.get();
-			}
-		}
-
 		// 4. 지갑 조회
 		Wallet wallet = walletRepositoryPort.findByUserId(reservation.getUserId())
-				.orElseThrow(() -> new IllegalArgumentException("지갑을 찾을 수 없습니다. userId : " + reservationId));
+				.orElseThrow(() -> new IllegalArgumentException("지갑을 찾을 수 없습니다. userId : " + reservation.getUserId()));
 
-		// 5. 잔액 확인
+		// 5. 잔액 확인 및 차감 (원자적 연산)
+		// deductBalanceIfSufficient는 잔액이 충분할 때만 차감하고 true를 반환합니다.
+		// 잔액이 부족하면 차감하지 않고 false를 반환합니다.
 		boolean deducted = walletRepositoryPort.deductBalanceIfSufficient(
 				wallet.getId(),
 				reservation.getAmountCents()
@@ -119,38 +132,74 @@ public class ProcessPaymentUseCase {
 					currentBalance, reservation.getAmountCents()));
 		}
 
-		// 6. 잔액 차감
-		walletRepositoryPort.deductBalance(wallet.getId(), reservation.getAmountCents());
+		// 주의: deductBalanceIfSufficient가 이미 잔액을 차감했으므로
+		// 추가로 deductBalance를 호출하면 안 됩니다. (중복 차감 방지)
 		
-		// 7. 결제 정보 생성
+		// 6. 결제 정보 생성 및 승인 (처음부터 APPROVED 상태로 생성)
+		// INIT 상태로 저장한 후 즉시 APPROVED로 변경하는 것은 불필요한 두 번의 저장입니다.
 		Payment payment = new Payment();
 		payment.setUserId(reservation.getUserId());
 		payment.setReservationId(reservationId);
 		payment.setTotalAmountCents(reservation.getAmountCents());
-		payment.setStatus(PaymentStatus.INIT);
-		payment.setIdempotencyKey(idempotencyKey != null ? idempotencyKey : UUID.randomUUID().toString());
-
-		// 8.결제 저장
-		payment = paymentRepositoryPort.save(payment);
-
-		// 9. 결제 승인 처리
+		payment.setIdempotencyKey(finalIdempotencyKey);
+		// 처음부터 APPROVED 상태로 설정
 		payment.markAsApproved();
+
+		// 7. 결제 저장
 		payment = paymentRepositoryPort.save(payment);
 
-		// 10. 거래 이력 기록
+		// 8. 거래 이력 기록
 		Ledger ledger = new Ledger();
-		ledger.setWallet(wallet);
+		ledger.setWallet(wallet); // 트랜잭션 내에서 처리되므로 지연 로딩 문제 없음
 		ledger.setAmount(reservation.getAmountCents());
 		ledger.setType(kr.hhplus.be.server.point.domain.LedgerType.PAYMENT); // 결제 타입 설정
 		ledger.setChargeDate(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")));
 		ledger.setChargeTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmmss")));
 		ledgerRepositoryPort.save(ledger);
 
-		// 11. 예약 상태 업데이트
+		// 9. 예약 상태 업데이트
 		reservation.markAsPaid();
 		reservationRepositoryPort.save(reservation);
 
+		// 10. 매진 여부 확인 및 랭킹 업데이트 (비동기 처리 권장)
+		// 트랜잭션 외부에서 처리하여 랭킹 업데이트 실패가 결제 실패로 이어지지 않도록 함
+		try {
+			checkAndUpdateRanking(reservation.getConcertSchedule().getConcertScheduleId());
+		} catch (Exception e) {
+			log.error("랭킹 업데이트 실패: concertScheduleId={}", reservation.getConcertSchedule().getConcertScheduleId(), e);
+			// 랭킹 업데이트 실패는 치명적이지 않으므로 예외를 다시 던지지 않음
+		}
+
 		return payment;
+	}
+
+	/**
+	 * 콘서트 일정의 매진 여부를 확인하고, 매진이면 랭킹에 추가
+	 * 
+	 * @param concertScheduleId 콘서트 일정 ID
+	 */
+	private void checkAndUpdateRanking(Long concertScheduleId) {
+		// 전체 좌석 개수 조회
+		long totalSeats = seatRepositoryPort.countByConcertScheduleId(concertScheduleId);
+		
+		if (totalSeats == 0) {
+			// 좌석이 없으면 매진 확인 불가
+			return;
+		}
+
+		// 결제 완료된 예약 개수 조회
+		long paidReservations = reservationRepositoryPort.countByConcertScheduleIdAndStatus(
+				concertScheduleId, 
+				ReservationStatus.PAID
+		);
+
+		// 모든 좌석이 결제 완료되었는지 확인
+		if (paidReservations >= totalSeats) {
+			// 매진! 랭킹에 추가
+			concertRankingService.addSoldOutConcert(concertScheduleId);
+			log.info("콘서트 매진: concertScheduleId={}, totalSeats={}, paidReservations={}", 
+					concertScheduleId, totalSeats, paidReservations);
+		}
 	}
 
 }

@@ -11,4 +11,9 @@ public interface SeatRepositoryPort {
 	Optional<Seat> findByIdWithLock(Long seatId);
 	Seat save(Seat seat);
 	boolean isSeatAvailable(Long seatId);
+	
+	/**
+	 * 콘서트 일정별 전체 좌석 개수 조회
+	 */
+	long countByConcertScheduleId(Long concertScheduleId);
 }
