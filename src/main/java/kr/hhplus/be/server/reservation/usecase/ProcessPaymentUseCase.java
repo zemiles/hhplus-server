@@ -1,19 +1,18 @@
 package kr.hhplus.be.server.reservation.usecase;
 
 import kr.hhplus.be.server.common.service.DistributedLockService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import kr.hhplus.be.server.point.domain.Ledger;
 import kr.hhplus.be.server.point.domain.Wallet;
 import kr.hhplus.be.server.reservation.domain.Payment;
-import kr.hhplus.be.server.reservation.domain.PaymentStatus;
 import kr.hhplus.be.server.reservation.domain.Reservation;
-import kr.hhplus.be.server.ranking.service.ConcertRankingService;
-import kr.hhplus.be.server.reservation.domain.ReservationStatus;
+import kr.hhplus.be.server.reservation.event.PaymentCompletedEvent;
 import kr.hhplus.be.server.reservation.port.LedgerRepositoryPort;
 import kr.hhplus.be.server.reservation.port.PaymentRepositoryPort;
 import kr.hhplus.be.server.reservation.port.ReservationRepositoryPort;
-import kr.hhplus.be.server.reservation.port.SeatRepositoryPort;
 import kr.hhplus.be.server.reservation.port.WalletRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,10 +33,9 @@ public class ProcessPaymentUseCase {
 	private final PaymentRepositoryPort paymentRepositoryPort;
 	private final WalletRepositoryPort walletRepositoryPort;
 	private final LedgerRepositoryPort ledgerRepositoryPort;
-	private final SeatRepositoryPort seatRepositoryPort;
-	private final ConcertRankingService concertRankingService;
 	private final DistributedLockService distributedLockService;
 	private final PlatformTransactionManager transactionManager;
+	private final ApplicationEventPublisher eventPublisher;
 	
 	// TransactionTemplate은 PlatformTransactionManager로부터 생성
 	private TransactionTemplate getTransactionTemplate() {
@@ -161,45 +159,41 @@ public class ProcessPaymentUseCase {
 		reservation.markAsPaid();
 		reservationRepositoryPort.save(reservation);
 
-		// 10. 매진 여부 확인 및 랭킹 업데이트 (비동기 처리 권장)
-		// 트랜잭션 외부에서 처리하여 랭킹 업데이트 실패가 결제 실패로 이어지지 않도록 함
-		try {
-			checkAndUpdateRanking(reservation.getConcertSchedule().getConcertScheduleId());
-		} catch (Exception e) {
-			log.error("랭킹 업데이트 실패: concertScheduleId={}", reservation.getConcertSchedule().getConcertScheduleId(), e);
-			// 랭킹 업데이트 실패는 치명적이지 않으므로 예외를 다시 던지지 않음
-		}
-
-		return payment;
-	}
-
-	/**
-	 * 콘서트 일정의 매진 여부를 확인하고, 매진이면 랭킹에 추가
-	 * 
-	 * @param concertScheduleId 콘서트 일정 ID
-	 */
-	private void checkAndUpdateRanking(Long concertScheduleId) {
-		// 전체 좌석 개수 조회
-		long totalSeats = seatRepositoryPort.countByConcertScheduleId(concertScheduleId);
+		// 10. 결제 완료 이벤트 발행 (트랜잭션 커밋 후 처리)
+		// 트랜잭션 커밋 후 이벤트를 발행하여 랭킹 업데이트와 데이터 플랫폼 전송이
+		// 트랜잭션과 분리되어 비동기로 처리되도록 합니다.
+		// 내부 클래스에서 사용하기 위해 final 변수로 복사
+		final Long finalPaymentId = payment.getId();
+		final Long finalUserId = payment.getUserId();
+		final Long finalReservationId = payment.getReservationId();
+		final Long finalConcertScheduleId = reservation.getConcertSchedule().getConcertScheduleId();
+		final BigDecimal finalTotalAmountCents = payment.getTotalAmountCents();
+		final String finalIdempotencyKeyForEvent = payment.getIdempotencyKey();
+		final Long finalReservationIdForLog = reservationId;
 		
-		if (totalSeats == 0) {
-			// 좌석이 없으면 매진 확인 불가
-			return;
-		}
-
-		// 결제 완료된 예약 개수 조회
-		long paidReservations = reservationRepositoryPort.countByConcertScheduleIdAndStatus(
-				concertScheduleId, 
-				ReservationStatus.PAID
+		// 트랜잭션 커밋 후 이벤트 발행
+		TransactionSynchronizationManager.registerSynchronization(
+			new org.springframework.transaction.support.TransactionSynchronizationAdapter() {
+				@Override
+				public void afterCommit() {
+					// 트랜잭션 커밋 후 이벤트 발행
+					PaymentCompletedEvent event = new PaymentCompletedEvent(
+						this,
+						finalPaymentId,
+						finalUserId,
+						finalReservationId,
+						finalConcertScheduleId,
+						finalTotalAmountCents,
+						finalIdempotencyKeyForEvent
+					);
+					eventPublisher.publishEvent(event);
+					log.debug("결제 완료 이벤트 발행: paymentId={}, reservationId={}", 
+							finalPaymentId, finalReservationIdForLog);
+				}
+			}
 		);
 
-		// 모든 좌석이 결제 완료되었는지 확인
-		if (paidReservations >= totalSeats) {
-			// 매진! 랭킹에 추가
-			concertRankingService.addSoldOutConcert(concertScheduleId);
-			log.info("콘서트 매진: concertScheduleId={}, totalSeats={}, paidReservations={}", 
-					concertScheduleId, totalSeats, paidReservations);
-		}
+		return payment;
 	}
 
 }
