@@ -18,4 +18,9 @@ public interface ReservationRepositoryPort {
 	List<Reservation> findExpiredReservations(ReservationStatus status, LocalDateTime now);
 
 	int expireReservations(ReservationStatus oldStatus, ReservationStatus newStatus, LocalDateTime now);
+
+	/**
+	 * 콘서트 일정별 결제 완료된 예약 개수 조회
+	 */
+	long countByConcertScheduleIdAndStatus(Long concertScheduleId, ReservationStatus status);
 }

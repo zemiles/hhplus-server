@@ -20,4 +20,10 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
 	@Query("SELECT s FROM Seat s WHERE s.seatId = :seatId")
 	Optional<Seat> findByIdWithLock(@Param("seatId") Long seatId);
 
+	/**
+	 * 콘서트 일정별 전체 좌석 개수 조회
+	 */
+	@Query("SELECT COUNT(s) FROM Seat s WHERE s.concertSchedule.concertScheduleId = :concertScheduleId")
+	long countByConcertScheduleId(@Param("concertScheduleId") Long concertScheduleId);
+
 }

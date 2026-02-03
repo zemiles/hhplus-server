@@ -32,4 +32,10 @@ public interface ReservationJpaRepository extends JpaRepository<Reservation, Lon
 		int expireReservations(@Param("oldStatus") ReservationStatus oldStatus,
 		                       @Param("newStatus") ReservationStatus newStatus,
 		                       @Param("now") LocalDateTime now);
+
+	/**
+	 * 콘서트 일정별 결제 완료된 예약 개수 조회
+	 */
+	@Query("SELECT COUNT(r) FROM Reservation r WHERE r.concertSchedule.concertScheduleId = :concertScheduleId AND r.status = :status")
+	long countByConcertScheduleIdAndStatus(@Param("concertScheduleId") Long concertScheduleId, @Param("status") ReservationStatus status);
 }
