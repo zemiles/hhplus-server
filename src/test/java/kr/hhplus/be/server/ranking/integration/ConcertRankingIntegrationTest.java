@@ -161,25 +161,29 @@ class ConcertRankingIntegrationTest {
 		assertThat(entries.get(0).getConcertScheduleId()).isEqualTo(concertScheduleId);
 		assertThat(entries.get(0).getSoldOutTimestamp()).isGreaterThanOrEqualTo(beforeTime);
 		assertThat(entries.get(0).getSoldOutTimestamp()).isLessThanOrEqualTo(afterTime + 100);
+		assertThat(entries.get(0).getRank()).isEqualTo(1L); // 첫 번째는 랭킹 1
 	}
 
 	@Test
-	@DisplayName("같은 콘서트를 여러 번 추가해도 한 번만 랭킹에 포함됨")
-	void testAddRanking_DuplicateConcert_OnlyOneEntry() throws InterruptedException {
+	@DisplayName("같은 콘서트를 여러 번 추가해도 최초 매진 시간이 유지됨 (ZADD NX)")
+	void testAddRanking_DuplicateConcert_PreservesFirstTimestamp() throws InterruptedException {
 		// given
 		Long concertScheduleId = 1L;
 
-		// when - 같은 콘서트를 여러 번 추가
+		// when - 같은 콘서트를 여러 번 추가 (ZADD NX로 최초 삽입만 허용)
+		long firstTime = System.currentTimeMillis();
 		concertRankingService.addSoldOutConcert(concertScheduleId);
-		Thread.sleep(10);
-		concertRankingService.addSoldOutConcert(concertScheduleId);
-		Thread.sleep(10);
-		concertRankingService.addSoldOutConcert(concertScheduleId);
+		Thread.sleep(100);
+		concertRankingService.addSoldOutConcert(concertScheduleId); // 두 번째 추가는 무시됨
+		Thread.sleep(100);
+		concertRankingService.addSoldOutConcert(concertScheduleId); // 세 번째 추가도 무시됨
 
-		// then - 한 번만 포함되어야 함 (마지막 점수로 업데이트됨)
-		List<Long> rankings = concertRankingService.getTopSoldOutRanking(10);
-		assertThat(rankings).contains(concertScheduleId);
-		// Sorted Set은 같은 member가 있으면 score가 업데이트되므로, 마지막 점수가 적용됨
+		// then - 한 번만 포함되어야 하고, 최초 매진 시간이 유지되어야 함
+		List<ConcertRankingService.RankingEntry> entries = concertRankingService.getTopSoldOutRankingWithScore(10);
+		assertThat(entries).hasSize(1);
+		assertThat(entries.get(0).getConcertScheduleId()).isEqualTo(concertScheduleId);
+		// 최초 매진 시간이 유지되어야 함 (ZADD NX)
+		assertThat(entries.get(0).getSoldOutTimestamp()).isLessThanOrEqualTo(firstTime + 100);
 	}
 
 	@Test
@@ -227,5 +231,10 @@ class ConcertRankingIntegrationTest {
 				.isLessThan(entries.get(1).getSoldOutTimestamp());
 		assertThat(entries.get(1).getSoldOutTimestamp())
 				.isLessThan(entries.get(2).getSoldOutTimestamp());
+		
+		// 랭킹도 올바르게 설정되었는지 확인
+		assertThat(entries.get(0).getRank()).isEqualTo(1L);
+		assertThat(entries.get(1).getRank()).isEqualTo(2L);
+		assertThat(entries.get(2).getRank()).isEqualTo(3L);
 	}
 }

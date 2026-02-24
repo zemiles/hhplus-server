@@ -7,6 +7,7 @@ import kr.hhplus.be.server.reservation.port.ReservationRepositoryPort;
 import kr.hhplus.be.server.reservation.port.SeatRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "app.event.provider", havingValue = "spring-event")
 public class PaymentRankingEventListener {
 
 	private final SeatRepositoryPort seatRepositoryPort;

@@ -1,7 +1,6 @@
 package kr.hhplus.be.server.reservation.usecase;
 
 import kr.hhplus.be.server.common.service.DistributedLockService;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -11,6 +10,7 @@ import kr.hhplus.be.server.reservation.domain.Payment;
 import kr.hhplus.be.server.reservation.domain.Reservation;
 import kr.hhplus.be.server.reservation.event.PaymentCompletedEvent;
 import kr.hhplus.be.server.reservation.port.LedgerRepositoryPort;
+import kr.hhplus.be.server.reservation.port.PaymentEventPublisherPort;
 import kr.hhplus.be.server.reservation.port.PaymentRepositoryPort;
 import kr.hhplus.be.server.reservation.port.ReservationRepositoryPort;
 import kr.hhplus.be.server.reservation.port.WalletRepositoryPort;
@@ -35,7 +35,7 @@ public class ProcessPaymentUseCase {
 	private final LedgerRepositoryPort ledgerRepositoryPort;
 	private final DistributedLockService distributedLockService;
 	private final PlatformTransactionManager transactionManager;
-	private final ApplicationEventPublisher eventPublisher;
+	private final PaymentEventPublisherPort paymentEventPublisher;
 	
 	// TransactionTemplate은 PlatformTransactionManager로부터 생성
 	private TransactionTemplate getTransactionTemplate() {
@@ -171,12 +171,11 @@ public class ProcessPaymentUseCase {
 		final String finalIdempotencyKeyForEvent = payment.getIdempotencyKey();
 		final Long finalReservationIdForLog = reservationId;
 		
-		// 트랜잭션 커밋 후 이벤트 발행
+		// 트랜잭션 커밋 후 Kafka로 이벤트 발행 (랭킹, 데이터 플랫폼 Consumer가 구독)
 		TransactionSynchronizationManager.registerSynchronization(
 			new org.springframework.transaction.support.TransactionSynchronizationAdapter() {
 				@Override
 				public void afterCommit() {
-					// 트랜잭션 커밋 후 이벤트 발행
 					PaymentCompletedEvent event = new PaymentCompletedEvent(
 						this,
 						finalPaymentId,
@@ -186,8 +185,8 @@ public class ProcessPaymentUseCase {
 						finalTotalAmountCents,
 						finalIdempotencyKeyForEvent
 					);
-					eventPublisher.publishEvent(event);
-					log.debug("결제 완료 이벤트 발행: paymentId={}, reservationId={}", 
+					paymentEventPublisher.publish(event);
+					log.debug("결제 완료 이벤트 발행 (Kafka): paymentId={}, reservationId={}",
 							finalPaymentId, finalReservationIdForLog);
 				}
 			}

@@ -13,6 +13,7 @@ import kr.hhplus.be.server.reservation.domain.Reservation;
 import kr.hhplus.be.server.reservation.domain.ReservationStatus;
 import kr.hhplus.be.server.reservation.port.LedgerRepositoryPort;
 import kr.hhplus.be.server.reservation.port.PaymentRepositoryPort;
+import kr.hhplus.be.server.reservation.port.PaymentEventPublisherPort;
 import kr.hhplus.be.server.reservation.port.ReservationRepositoryPort;
 import kr.hhplus.be.server.reservation.port.WalletRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,8 +23,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -34,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 /**
  * ProcessPaymentUseCase 단위 테스트
@@ -67,7 +69,7 @@ class ProcessPaymentUseCaseTest {
 	private PlatformTransactionManager transactionManager;
 
 	@Mock
-	private ApplicationEventPublisher eventPublisher;
+	private PaymentEventPublisherPort paymentEventPublisher;
 
 	@InjectMocks
 	private ProcessPaymentUseCase processPaymentUseCase;
@@ -80,6 +82,31 @@ class ProcessPaymentUseCaseTest {
 
 	@BeforeEach
 	void setUp() {
+		// TransactionTemplate Mock - 트랜잭션 커밋 시 afterCommit 호출
+		org.springframework.transaction.support.DefaultTransactionStatus transactionStatus =
+				new org.springframework.transaction.support.DefaultTransactionStatus(
+						null, true, false, false, false, null);
+
+		lenient().when(transactionManager.getTransaction(any())).thenAnswer(invocation -> {
+			TransactionSynchronizationManager.initSynchronization();
+			return transactionStatus;
+		});
+
+		lenient().doAnswer(invocation -> {
+			TransactionSynchronizationManager.getSynchronizations().forEach(sync -> {
+				if (sync instanceof org.springframework.transaction.support.TransactionSynchronization) {
+					((org.springframework.transaction.support.TransactionSynchronization) sync).afterCommit();
+				}
+			});
+			TransactionSynchronizationManager.clearSynchronization();
+			return null;
+		}).when(transactionManager).commit(any());
+
+		lenient().doAnswer(invocation -> {
+			TransactionSynchronizationManager.clearSynchronization();
+			return null;
+		}).when(transactionManager).rollback(any());
+
 		reservationId = 1L;
 		userId = 100L;
 		idempotencyKey = "test-payment-key";
@@ -171,7 +198,8 @@ class ProcessPaymentUseCaseTest {
 			return supplier.get();
 		});
 
-		when(reservationRepositoryPort.findById(reservationId)).thenReturn(Optional.of(reservation));
+		// findById는 호출되지 않음 (findByIdempotencyKey에서 먼저 반환)
+		lenient().when(reservationRepositoryPort.findById(reservationId)).thenReturn(Optional.of(reservation));
 		when(paymentRepositoryPort.findByIdempotencyKey(idempotencyKey))
 				.thenReturn(Optional.of(existingPayment));
 
@@ -218,13 +246,12 @@ class ProcessPaymentUseCaseTest {
 		});
 
 		when(reservationRepositoryPort.findById(reservationId)).thenReturn(Optional.of(reservation));
-		when(reservationRepositoryPort.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 		// when & then
 		assertThatThrownBy(() -> processPaymentUseCase.execute(reservationId, idempotencyKey))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("예약이 만료되었습니다");
-		verify(reservationRepositoryPort).save(any(Reservation.class)); // 만료 상태로 저장
+		// 만료 시 예외만 던지고 save는 호출하지 않음 (트랜잭션 롤백)
 	}
 
 	@Test
@@ -332,8 +359,6 @@ class ProcessPaymentUseCaseTest {
 
 		// then
 		assertThat(result).isNotNull();
-		// 이벤트 발행은 트랜잭션 커밋 후에 발생하므로, 
-		// 실제로는 TransactionSynchronizationManager를 통해 처리됩니다.
-		// 여기서는 이벤트 발행 로직이 등록되었는지만 확인합니다.
+		verify(paymentEventPublisher).publish(any(kr.hhplus.be.server.reservation.event.PaymentCompletedEvent.class));
 	}
 }

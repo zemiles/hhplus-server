@@ -45,12 +45,11 @@ class RankingControllerTest {
 	}
 
 	@Test
-	@DisplayName("랭킹 조회 시 기본 limit 10으로 조회됨")
+	@DisplayName("랭킹 조회 시 기본 limit 10으로 조회됨 (N+1 문제 해결)")
 	void testGetTopSoldOutRanking_DefaultLimit_ReturnsTop10() {
 		// given
 		List<ConcertRankingService.RankingEntry> entries = createRankingEntries(10);
 		when(concertRankingService.getTopSoldOutRankingWithScore(10)).thenReturn(entries);
-		when(concertRankingService.getRank(anyLong())).thenReturn(1L);
 
 		// when
 		List<RankingResponse> result = rankingController.getTopSoldOutRanking(10);
@@ -58,6 +57,8 @@ class RankingControllerTest {
 		// then
 		assertThat(result).hasSize(10);
 		verify(concertRankingService).getTopSoldOutRankingWithScore(10);
+		// N+1 문제 해결: getRank가 호출되지 않아야 함
+		verify(concertRankingService, never()).getRank(anyLong());
 	}
 
 	@Test
@@ -79,7 +80,6 @@ class RankingControllerTest {
 		// given
 		List<ConcertRankingService.RankingEntry> entries = createRankingEntries(1);
 		when(concertRankingService.getTopSoldOutRankingWithScore(1)).thenReturn(entries);
-		when(concertRankingService.getRank(anyLong())).thenReturn(1L);
 
 		// when
 		List<RankingResponse> result = rankingController.getTopSoldOutRanking(1);
@@ -87,6 +87,7 @@ class RankingControllerTest {
 		// then
 		assertThat(result).hasSize(1);
 		verify(concertRankingService).getTopSoldOutRankingWithScore(1);
+		verify(concertRankingService, never()).getRank(anyLong());
 	}
 
 	@Test
@@ -95,7 +96,6 @@ class RankingControllerTest {
 		// given
 		List<ConcertRankingService.RankingEntry> entries = createRankingEntries(100);
 		when(concertRankingService.getTopSoldOutRankingWithScore(100)).thenReturn(entries);
-		when(concertRankingService.getRank(anyLong())).thenReturn(1L);
 
 		// when
 		List<RankingResponse> result = rankingController.getTopSoldOutRanking(100);
@@ -103,15 +103,15 @@ class RankingControllerTest {
 		// then
 		assertThat(result).hasSize(100);
 		verify(concertRankingService).getTopSoldOutRankingWithScore(100);
+		verify(concertRankingService, never()).getRank(anyLong());
 	}
 
 	@Test
 	@DisplayName("랭킹 응답에 올바른 정보가 포함됨")
 	void testGetTopSoldOutRanking_ResponseContainsCorrectInfo() {
 		// given
-		ConcertRankingService.RankingEntry entry = new ConcertRankingService.RankingEntry(1L, 1000L);
+		ConcertRankingService.RankingEntry entry = new ConcertRankingService.RankingEntry(1L, 1000L, 1L);
 		when(concertRankingService.getTopSoldOutRankingWithScore(10)).thenReturn(List.of(entry));
-		when(concertRankingService.getRank(1L)).thenReturn(1L);
 
 		// when
 		List<RankingResponse> result = rankingController.getTopSoldOutRanking(10);
@@ -122,21 +122,19 @@ class RankingControllerTest {
 		assertThat(result.get(0).getRank()).isEqualTo(1L);
 		assertThat(result.get(0).getSoldOutTimestamp()).isEqualTo(1000L);
 		assertThat(result.get(0).getSoldOutDateTime()).isNotNull();
+		verify(concertRankingService, never()).getRank(anyLong());
 	}
 
 	@Test
-	@DisplayName("여러 랭킹이 있을 때 각각의 랭킹이 올바르게 반환됨")
+	@DisplayName("여러 랭킹이 있을 때 각각의 랭킹이 올바르게 반환됨 (인덱스 기반)")
 	void testGetTopSoldOutRanking_MultipleRankings_ReturnsCorrectRanks() {
 		// given
 		List<ConcertRankingService.RankingEntry> entries = new ArrayList<>();
-		entries.add(new ConcertRankingService.RankingEntry(1L, 1000L));
-		entries.add(new ConcertRankingService.RankingEntry(2L, 2000L));
-		entries.add(new ConcertRankingService.RankingEntry(3L, 3000L));
+		entries.add(new ConcertRankingService.RankingEntry(1L, 1000L, 1L));
+		entries.add(new ConcertRankingService.RankingEntry(2L, 2000L, 2L));
+		entries.add(new ConcertRankingService.RankingEntry(3L, 3000L, 3L));
 		
 		when(concertRankingService.getTopSoldOutRankingWithScore(10)).thenReturn(entries);
-		when(concertRankingService.getRank(1L)).thenReturn(1L);
-		when(concertRankingService.getRank(2L)).thenReturn(2L);
-		when(concertRankingService.getRank(3L)).thenReturn(3L);
 
 		// when
 		List<RankingResponse> result = rankingController.getTopSoldOutRanking(10);
@@ -146,6 +144,7 @@ class RankingControllerTest {
 		assertThat(result.get(0).getRank()).isEqualTo(1L);
 		assertThat(result.get(1).getRank()).isEqualTo(2L);
 		assertThat(result.get(2).getRank()).isEqualTo(3L);
+		verify(concertRankingService, never()).getRank(anyLong());
 	}
 
 	@Test
@@ -165,9 +164,8 @@ class RankingControllerTest {
 	@DisplayName("매진 시간이 0이어도 정상적으로 처리됨")
 	void testGetTopSoldOutRanking_ZeroTimestamp_HandlesCorrectly() {
 		// given
-		ConcertRankingService.RankingEntry entry = new ConcertRankingService.RankingEntry(1L, 0L);
+		ConcertRankingService.RankingEntry entry = new ConcertRankingService.RankingEntry(1L, 0L, 1L);
 		when(concertRankingService.getTopSoldOutRankingWithScore(10)).thenReturn(List.of(entry));
-		when(concertRankingService.getRank(1L)).thenReturn(1L);
 
 		// when
 		List<RankingResponse> result = rankingController.getTopSoldOutRanking(10);
@@ -175,6 +173,7 @@ class RankingControllerTest {
 		// then
 		assertThat(result).hasSize(1);
 		assertThat(result.get(0).getSoldOutTimestamp()).isEqualTo(0L);
+		verify(concertRankingService, never()).getRank(anyLong());
 	}
 
 	@Test
@@ -182,9 +181,8 @@ class RankingControllerTest {
 	void testGetTopSoldOutRanking_VeryLargeTimestamp_HandlesCorrectly() {
 		// given
 		long largeTimestamp = Long.MAX_VALUE;
-		ConcertRankingService.RankingEntry entry = new ConcertRankingService.RankingEntry(1L, largeTimestamp);
+		ConcertRankingService.RankingEntry entry = new ConcertRankingService.RankingEntry(1L, largeTimestamp, 1L);
 		when(concertRankingService.getTopSoldOutRankingWithScore(10)).thenReturn(List.of(entry));
-		when(concertRankingService.getRank(1L)).thenReturn(1L);
 
 		// when
 		List<RankingResponse> result = rankingController.getTopSoldOutRanking(10);
@@ -192,29 +190,31 @@ class RankingControllerTest {
 		// then
 		assertThat(result).hasSize(1);
 		assertThat(result.get(0).getSoldOutTimestamp()).isEqualTo(largeTimestamp);
+		verify(concertRankingService, never()).getRank(anyLong());
 	}
 
 	@Test
-	@DisplayName("랭킹이 -1을 반환해도 정상적으로 처리됨")
-	void testGetTopSoldOutRanking_RankMinusOne_HandlesCorrectly() {
+	@DisplayName("랭킹이 올바르게 설정됨")
+	void testGetTopSoldOutRanking_RankIsSetCorrectly() {
 		// given
-		ConcertRankingService.RankingEntry entry = new ConcertRankingService.RankingEntry(1L, 1000L);
+		ConcertRankingService.RankingEntry entry = new ConcertRankingService.RankingEntry(1L, 1000L, 1L);
 		when(concertRankingService.getTopSoldOutRankingWithScore(10)).thenReturn(List.of(entry));
-		when(concertRankingService.getRank(1L)).thenReturn(-1L); // 랭킹에 없음
 
 		// when
 		List<RankingResponse> result = rankingController.getTopSoldOutRanking(10);
 
 		// then
 		assertThat(result).hasSize(1);
-		assertThat(result.get(0).getRank()).isEqualTo(-1L);
+		assertThat(result.get(0).getRank()).isEqualTo(1L);
+		verify(concertRankingService, never()).getRank(anyLong());
 	}
 
 	// Helper method
 	private List<ConcertRankingService.RankingEntry> createRankingEntries(int count) {
 		List<ConcertRankingService.RankingEntry> entries = new ArrayList<>();
 		for (int i = 1; i <= count; i++) {
-			entries.add(new ConcertRankingService.RankingEntry((long) i, (long) (i * 1000)));
+			// 인덱스 기반으로 랭킹 설정 (1부터 시작)
+			entries.add(new ConcertRankingService.RankingEntry((long) i, (long) (i * 1000), (long) i));
 		}
 		return entries;
 	}

@@ -14,6 +14,7 @@ import kr.hhplus.be.server.reservation.listener.PaymentDataPlatformEventListener
 import kr.hhplus.be.server.reservation.listener.PaymentRankingEventListener;
 import kr.hhplus.be.server.reservation.port.LedgerRepositoryPort;
 import kr.hhplus.be.server.reservation.port.PaymentRepositoryPort;
+import kr.hhplus.be.server.reservation.port.PaymentEventPublisherPort;
 import kr.hhplus.be.server.reservation.port.ReservationRepositoryPort;
 import kr.hhplus.be.server.reservation.port.SeatRepositoryPort;
 import kr.hhplus.be.server.reservation.port.WalletRepositoryPort;
@@ -24,7 +25,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -63,7 +63,7 @@ class ProcessPaymentEventIntegrationTest {
 	private PlatformTransactionManager transactionManager;
 
 	@Mock
-	private ApplicationEventPublisher eventPublisher;
+	private PaymentEventPublisherPort paymentEventPublisher;
 
 	@Mock
 	private SeatRepositoryPort seatRepositoryPort;
@@ -153,29 +153,25 @@ class ProcessPaymentEventIntegrationTest {
 		when(ledgerRepositoryPort.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 		when(reservationRepositoryPort.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-		// TransactionTemplate Mock 설정 - 실제 트랜잭션 커밋 시뮬레이션
-		doAnswer(invocation -> {
-			org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
-			Object result = callback.doInTransaction(null);
-			
-			// 트랜잭션 커밋 후 이벤트 발행 시뮬레이션
+		// TransactionTemplate Mock - getTransaction 시 initSynchronization, commit 시 afterCommit 호출
+		org.springframework.transaction.support.DefaultTransactionStatus transactionStatus =
+				new org.springframework.transaction.support.DefaultTransactionStatus(
+						null, true, false, false, false, null);
+
+		when(transactionManager.getTransaction(any())).thenAnswer(invocation -> {
 			TransactionSynchronizationManager.initSynchronization();
-			try {
-				// afterCommit 호출 시뮬레이션
-				TransactionSynchronizationManager.getSynchronizations().forEach(sync -> {
-					if (sync instanceof org.springframework.transaction.support.TransactionSynchronizationAdapter) {
-						try {
-							((org.springframework.transaction.support.TransactionSynchronizationAdapter) sync).afterCommit();
-						} catch (Exception e) {
-							// 무시
-						}
-					}
-				});
-			} finally {
-				TransactionSynchronizationManager.clearSynchronization();
-			}
-			return result;
-		}).when(transactionManager).getTransaction(any());
+			return transactionStatus;
+		});
+
+		doAnswer(invocation -> {
+			TransactionSynchronizationManager.getSynchronizations().forEach(sync -> {
+				if (sync instanceof org.springframework.transaction.support.TransactionSynchronization) {
+					((org.springframework.transaction.support.TransactionSynchronization) sync).afterCommit();
+				}
+			});
+			TransactionSynchronizationManager.clearSynchronization();
+			return null;
+		}).when(transactionManager).commit(any());
 
 		// when
 		Payment result = processPaymentUseCase.execute(reservationId, idempotencyKey);
@@ -184,8 +180,7 @@ class ProcessPaymentEventIntegrationTest {
 		assertThat(result).isNotNull();
 		assertThat(result.getStatus()).isEqualTo(PaymentStatus.APPROVED);
 
-		// 이벤트가 발행되었는지 확인 (실제로는 TransactionSynchronizationManager를 통해 처리됨)
-		// 여기서는 이벤트 발행 로직이 정상적으로 등록되었는지만 확인
+		verify(paymentEventPublisher).publish(any(PaymentCompletedEvent.class));
 	}
 
 	@Test
