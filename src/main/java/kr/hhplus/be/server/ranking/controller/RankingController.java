@@ -31,18 +31,17 @@ public class RankingController {
 	public List<RankingResponse> getTopSoldOutRanking(
 			@RequestParam(defaultValue = "10") int limit) {
 		
+		// getTopSoldOutRankingWithScore에서 이미 랭킹을 포함하여 반환하므로
+		// 개별 getRank 호출이 필요 없습니다. (N+1 문제 해결)
 		List<ConcertRankingService.RankingEntry> rankingEntries = 
 				concertRankingService.getTopSoldOutRankingWithScore(limit);
 
 		return rankingEntries.stream()
-				.map(entry -> {
-					long rank = concertRankingService.getRank(entry.getConcertScheduleId());
-					return new RankingResponse(
-							entry.getConcertScheduleId(),
-							rank,
-							entry.getSoldOutTimestamp()
-					);
-				})
+				.map(entry -> new RankingResponse(
+						entry.getConcertScheduleId(),
+						entry.getRank(),
+						entry.getSoldOutTimestamp()
+				))
 				.collect(Collectors.toList());
 	}
 }

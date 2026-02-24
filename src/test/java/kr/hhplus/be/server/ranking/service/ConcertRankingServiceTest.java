@@ -47,17 +47,33 @@ class ConcertRankingServiceTest {
 	}
 
 	@Test
-	@DisplayName("매진된 콘서트를 랭킹에 추가하면 성공적으로 추가됨")
+	@DisplayName("매진된 콘서트를 랭킹에 추가하면 성공적으로 추가됨 (ZADD NX)")
 	void testAddSoldOutConcert_Success_AddsToRanking() {
 		// given
 		Long concertScheduleId = 1L;
-		when(zSetOperations.add(anyString(), anyString(), anyDouble())).thenReturn(true);
+		when(zSetOperations.addIfAbsent(anyString(), anyString(), anyDouble())).thenReturn(true);
 
 		// when
 		concertRankingService.addSoldOutConcert(concertScheduleId);
 
 		// then
-		verify(zSetOperations).add(eq("ranking:soldout:concert_schedule"), eq("1"), anyDouble());
+		verify(zSetOperations).addIfAbsent(eq("ranking:soldout:concert_schedule"), eq("1"), anyDouble());
+	}
+
+	@Test
+	@DisplayName("이미 존재하는 콘서트는 최초 매진 시간이 유지됨 (ZADD NX)")
+	void testAddSoldOutConcert_AlreadyExists_PreservesFirstTimestamp() {
+		// given
+		Long concertScheduleId = 1L;
+		// addIfAbsent가 false를 반환하면 이미 존재함 (최초 삽입만 허용)
+		when(zSetOperations.addIfAbsent(anyString(), anyString(), anyDouble())).thenReturn(false);
+
+		// when
+		concertRankingService.addSoldOutConcert(concertScheduleId);
+
+		// then
+		verify(zSetOperations).addIfAbsent(eq("ranking:soldout:concert_schedule"), eq("1"), anyDouble());
+		// addIfAbsent가 false를 반환했으므로 최초 매진 시간이 유지됨
 	}
 
 	@Test
@@ -65,12 +81,12 @@ class ConcertRankingServiceTest {
 	void testAddSoldOutConcert_RedisException_DoesNotThrow() {
 		// given
 		Long concertScheduleId = 1L;
-		when(zSetOperations.add(anyString(), anyString(), anyDouble()))
+		when(zSetOperations.addIfAbsent(anyString(), anyString(), anyDouble()))
 				.thenThrow(new RuntimeException("Redis connection error"));
 
 		// when & then - 예외가 발생하지 않아야 함
 		concertRankingService.addSoldOutConcert(concertScheduleId);
-		verify(zSetOperations).add(anyString(), anyString(), anyDouble());
+		verify(zSetOperations).addIfAbsent(anyString(), anyString(), anyDouble());
 	}
 
 	@Test
@@ -172,8 +188,10 @@ class ConcertRankingServiceTest {
 		assertThat(result).hasSize(2);
 		assertThat(result.get(0).getConcertScheduleId()).isEqualTo(1L);
 		assertThat(result.get(0).getSoldOutTimestamp()).isEqualTo(1000L);
+		assertThat(result.get(0).getRank()).isEqualTo(1L); // 첫 번째는 랭킹 1
 		assertThat(result.get(1).getConcertScheduleId()).isEqualTo(2L);
 		assertThat(result.get(1).getSoldOutTimestamp()).isEqualTo(2000L);
+		assertThat(result.get(1).getRank()).isEqualTo(2L); // 두 번째는 랭킹 2
 	}
 
 	@Test
@@ -269,6 +287,10 @@ class ConcertRankingServiceTest {
 		assertThat(result).hasSize(3);
 		assertThat(result.get(0).getSoldOutTimestamp()).isLessThan(result.get(1).getSoldOutTimestamp());
 		assertThat(result.get(1).getSoldOutTimestamp()).isLessThan(result.get(2).getSoldOutTimestamp());
+		// 랭킹도 올바르게 설정되었는지 확인
+		assertThat(result.get(0).getRank()).isEqualTo(1L);
+		assertThat(result.get(1).getRank()).isEqualTo(2L);
+		assertThat(result.get(2).getRank()).isEqualTo(3L);
 	}
 
 	@Test
@@ -303,14 +325,13 @@ class ConcertRankingServiceTest {
 	void testRankingOrder_VeryLargeTimestamp_HandlesCorrectly() {
 		// given
 		Long concertScheduleId = 1L;
-		long futureTimestamp = Long.MAX_VALUE - 1000;
-		when(zSetOperations.add(anyString(), anyString(), anyDouble())).thenReturn(true);
+		when(zSetOperations.addIfAbsent(anyString(), anyString(), anyDouble())).thenReturn(true);
 
 		// when
 		concertRankingService.addSoldOutConcert(concertScheduleId);
 
 		// then - 예외가 발생하지 않아야 함
-		verify(zSetOperations).add(anyString(), anyString(), anyDouble());
+		verify(zSetOperations).addIfAbsent(anyString(), anyString(), anyDouble());
 	}
 
 	@Test

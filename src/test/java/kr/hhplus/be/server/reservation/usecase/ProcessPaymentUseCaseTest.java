@@ -13,6 +13,7 @@ import kr.hhplus.be.server.reservation.domain.Reservation;
 import kr.hhplus.be.server.reservation.domain.ReservationStatus;
 import kr.hhplus.be.server.reservation.port.LedgerRepositoryPort;
 import kr.hhplus.be.server.reservation.port.PaymentRepositoryPort;
+import kr.hhplus.be.server.reservation.port.PaymentEventPublisherPort;
 import kr.hhplus.be.server.reservation.port.ReservationRepositoryPort;
 import kr.hhplus.be.server.reservation.port.WalletRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +24,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -34,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 /**
  * ProcessPaymentUseCase 단위 테스트
@@ -66,6 +68,9 @@ class ProcessPaymentUseCaseTest {
 	@Mock
 	private PlatformTransactionManager transactionManager;
 
+	@Mock
+	private PaymentEventPublisherPort paymentEventPublisher;
+
 	@InjectMocks
 	private ProcessPaymentUseCase processPaymentUseCase;
 
@@ -77,9 +82,38 @@ class ProcessPaymentUseCaseTest {
 
 	@BeforeEach
 	void setUp() {
+		// TransactionTemplate Mock - 트랜잭션 커밋 시 afterCommit 호출
+		org.springframework.transaction.support.DefaultTransactionStatus transactionStatus =
+				new org.springframework.transaction.support.DefaultTransactionStatus(
+						null, true, false, false, false, null);
+
+		lenient().when(transactionManager.getTransaction(any())).thenAnswer(invocation -> {
+			TransactionSynchronizationManager.initSynchronization();
+			return transactionStatus;
+		});
+
+		lenient().doAnswer(invocation -> {
+			TransactionSynchronizationManager.getSynchronizations().forEach(sync -> {
+				if (sync instanceof org.springframework.transaction.support.TransactionSynchronization) {
+					((org.springframework.transaction.support.TransactionSynchronization) sync).afterCommit();
+				}
+			});
+			TransactionSynchronizationManager.clearSynchronization();
+			return null;
+		}).when(transactionManager).commit(any());
+
+		lenient().doAnswer(invocation -> {
+			TransactionSynchronizationManager.clearSynchronization();
+			return null;
+		}).when(transactionManager).rollback(any());
+
 		reservationId = 1L;
 		userId = 100L;
 		idempotencyKey = "test-payment-key";
+
+		// ConcertSchedule 설정
+		ConcertSchedule concertSchedule = new ConcertSchedule();
+		concertSchedule.setConcertScheduleId(1L);
 
 		// Reservation 설정
 		reservation = new Reservation();
@@ -88,6 +122,7 @@ class ProcessPaymentUseCaseTest {
 		reservation.setStatus(ReservationStatus.HOLD);
 		reservation.setHoldExpiresAt(LocalDateTime.now().plusMinutes(10));
 		reservation.setAmountCents(new BigDecimal(80000));
+		reservation.setConcertSchedule(concertSchedule);
 
 		// Wallet 설정
 		User user = new User();
@@ -131,12 +166,6 @@ class ProcessPaymentUseCaseTest {
 		when(ledgerRepositoryPort.save(any(Ledger.class))).thenAnswer(invocation -> invocation.getArgument(0));
 		when(reservationRepositoryPort.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-		// TransactionTemplate Mock 설정
-		doAnswer(invocation -> {
-			org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
-			return callback.doInTransaction(null);
-		}).when(transactionManager).getTransaction(any());
-
 		// when
 		Payment result = processPaymentUseCase.execute(reservationId, idempotencyKey);
 
@@ -169,15 +198,10 @@ class ProcessPaymentUseCaseTest {
 			return supplier.get();
 		});
 
-		when(reservationRepositoryPort.findById(reservationId)).thenReturn(Optional.of(reservation));
+		// findById는 호출되지 않음 (findByIdempotencyKey에서 먼저 반환)
+		lenient().when(reservationRepositoryPort.findById(reservationId)).thenReturn(Optional.of(reservation));
 		when(paymentRepositoryPort.findByIdempotencyKey(idempotencyKey))
 				.thenReturn(Optional.of(existingPayment));
-
-		// TransactionTemplate Mock 설정
-		doAnswer(invocation -> {
-			org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
-			return callback.doInTransaction(null);
-		}).when(transactionManager).getTransaction(any());
 
 		// when
 		Payment result = processPaymentUseCase.execute(reservationId, idempotencyKey);
@@ -203,12 +227,6 @@ class ProcessPaymentUseCaseTest {
 
 		when(reservationRepositoryPort.findById(reservationId)).thenReturn(Optional.empty());
 
-		// TransactionTemplate Mock 설정
-		doAnswer(invocation -> {
-			org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
-			return callback.doInTransaction(null);
-		}).when(transactionManager).getTransaction(any());
-
 		// when & then
 		assertThatThrownBy(() -> processPaymentUseCase.execute(reservationId, idempotencyKey))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -228,19 +246,12 @@ class ProcessPaymentUseCaseTest {
 		});
 
 		when(reservationRepositoryPort.findById(reservationId)).thenReturn(Optional.of(reservation));
-		when(reservationRepositoryPort.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-		// TransactionTemplate Mock 설정
-		doAnswer(invocation -> {
-			org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
-			return callback.doInTransaction(null);
-		}).when(transactionManager).getTransaction(any());
 
 		// when & then
 		assertThatThrownBy(() -> processPaymentUseCase.execute(reservationId, idempotencyKey))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("예약이 만료되었습니다");
-		verify(reservationRepositoryPort).save(any(Reservation.class)); // 만료 상태로 저장
+		// 만료 시 예외만 던지고 save는 호출하지 않음 (트랜잭션 롤백)
 	}
 
 	@Test
@@ -256,12 +267,6 @@ class ProcessPaymentUseCaseTest {
 		});
 
 		when(reservationRepositoryPort.findById(reservationId)).thenReturn(Optional.of(reservation));
-
-		// TransactionTemplate Mock 설정
-		doAnswer(invocation -> {
-			org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
-			return callback.doInTransaction(null);
-		}).when(transactionManager).getTransaction(any());
 
 		// when & then
 		assertThatThrownBy(() -> processPaymentUseCase.execute(reservationId, idempotencyKey))
@@ -282,12 +287,6 @@ class ProcessPaymentUseCaseTest {
 		when(reservationRepositoryPort.findById(reservationId)).thenReturn(Optional.of(reservation));
 		when(paymentRepositoryPort.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
 		when(walletRepositoryPort.findByUserId(userId)).thenReturn(Optional.empty());
-
-		// TransactionTemplate Mock 설정
-		doAnswer(invocation -> {
-			org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
-			return callback.doInTransaction(null);
-		}).when(transactionManager).getTransaction(any());
 
 		// when & then
 		assertThatThrownBy(() -> processPaymentUseCase.execute(reservationId, idempotencyKey))
@@ -313,12 +312,6 @@ class ProcessPaymentUseCaseTest {
 		when(walletRepositoryPort.deductBalanceIfSufficient(anyLong(), any(BigDecimal.class))).thenReturn(false);
 		when(walletRepositoryPort.getBalance(wallet.getId())).thenReturn(new BigDecimal(10000));
 
-		// TransactionTemplate Mock 설정
-		doAnswer(invocation -> {
-			org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
-			return callback.doInTransaction(null);
-		}).when(transactionManager).getTransaction(any());
-
 		// when & then
 		assertThatThrownBy(() -> processPaymentUseCase.execute(reservationId, idempotencyKey))
 				.isInstanceOf(IllegalStateException.class)
@@ -326,5 +319,46 @@ class ProcessPaymentUseCaseTest {
 		verify(walletRepositoryPort).deductBalanceIfSufficient(wallet.getId(), reservation.getAmountCents());
 		verify(walletRepositoryPort).getBalance(wallet.getId());
 		verify(paymentRepositoryPort, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("결제 완료 시 이벤트가 발행됨")
+	void testExecute_Success_PublishesPaymentCompletedEvent() {
+		// given
+		when(distributedLockService.executeWithLock(anyString(), any(java.util.function.Supplier.class))).thenAnswer(invocation -> {
+			@SuppressWarnings("unchecked")
+			java.util.function.Supplier<Payment> supplier = invocation.getArgument(1);
+			return supplier.get();
+		});
+
+		when(reservationRepositoryPort.findById(reservationId)).thenReturn(Optional.of(reservation));
+		when(paymentRepositoryPort.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
+		when(walletRepositoryPort.findByUserId(userId)).thenReturn(Optional.of(wallet));
+		when(walletRepositoryPort.deductBalanceIfSufficient(anyLong(), any(BigDecimal.class))).thenReturn(true);
+
+		Payment savedPayment = new Payment();
+		savedPayment.setId(1L);
+		savedPayment.setUserId(userId);
+		savedPayment.setReservationId(reservationId);
+		savedPayment.setTotalAmountCents(reservation.getAmountCents());
+		savedPayment.setStatus(PaymentStatus.APPROVED);
+		savedPayment.setIdempotencyKey(idempotencyKey);
+
+		when(paymentRepositoryPort.save(any(Payment.class))).thenAnswer(invocation -> {
+			Payment payment = invocation.getArgument(0);
+			savedPayment.setIdempotencyKey(payment.getIdempotencyKey());
+			savedPayment.setStatus(payment.getStatus());
+			return savedPayment;
+		});
+
+		when(ledgerRepositoryPort.save(any(Ledger.class))).thenAnswer(invocation -> invocation.getArgument(0));
+		when(reservationRepositoryPort.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		// when
+		Payment result = processPaymentUseCase.execute(reservationId, idempotencyKey);
+
+		// then
+		assertThat(result).isNotNull();
+		verify(paymentEventPublisher).publish(any(kr.hhplus.be.server.reservation.event.PaymentCompletedEvent.class));
 	}
 }

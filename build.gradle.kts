@@ -45,6 +45,9 @@ dependencies {
 	testCompileOnly("org.projectlombok:lombok")
 	testAnnotationProcessor("org.projectlombok:lombok")
 
+	// Kafka
+	implementation("org.springframework.kafka:spring-kafka")
+
 	// Redis
 	implementation("org.springframework.boot:spring-boot-starter-data-redis")
 	implementation("org.apache.commons:commons-pool2") // Connection Pool

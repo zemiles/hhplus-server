@@ -3,6 +3,12 @@ spring:
     name: hhplus
   profiles:
     active: local
+  kafka:
+    bootstrap-servers: localhost:9092
+    topic:
+      payment-completed: payment-completed
+    consumer:
+      auto-startup: true
   datasource:
     name: HangHaePlusDataSource
     type: com.zaxxer.hikari.HikariDataSource
@@ -59,7 +65,14 @@ spring:
 ---
 spring.config.activate.on-profile: h2
 
+app:
+  event:
+    provider: spring-event  # 테스트 시 Kafka 대신 Spring Event 사용
+
 spring:
+  kafka:
+    consumer:
+      auto-startup: false  # 테스트 시 Kafka 미실행 가능
   datasource:
     url: jdbc:h2:mem:testdb;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver

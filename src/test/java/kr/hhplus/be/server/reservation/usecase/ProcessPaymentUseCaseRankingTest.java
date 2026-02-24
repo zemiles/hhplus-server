@@ -12,6 +12,9 @@ import kr.hhplus.be.server.reservation.domain.PaymentStatus;
 import kr.hhplus.be.server.reservation.domain.Reservation;
 import kr.hhplus.be.server.reservation.domain.ReservationStatus;
 import kr.hhplus.be.server.reservation.port.LedgerRepositoryPort;
+import kr.hhplus.be.server.reservation.event.PaymentCompletedEvent;
+import kr.hhplus.be.server.reservation.listener.PaymentRankingEventListener;
+import kr.hhplus.be.server.reservation.port.PaymentEventPublisherPort;
 import kr.hhplus.be.server.reservation.port.PaymentRepositoryPort;
 import kr.hhplus.be.server.reservation.port.ReservationRepositoryPort;
 import kr.hhplus.be.server.reservation.port.SeatRepositoryPort;
@@ -24,6 +27,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -72,8 +76,14 @@ class ProcessPaymentUseCaseRankingTest {
 	@Mock
 	private PlatformTransactionManager transactionManager;
 
+	@Mock
+	private PaymentEventPublisherPort paymentEventPublisher;
+
 	@InjectMocks
 	private ProcessPaymentUseCase processPaymentUseCase;
+
+	@InjectMocks
+	private PaymentRankingEventListener rankingEventListener;
 
 	private Long reservationId;
 	private Long userId;
@@ -373,16 +383,31 @@ class ProcessPaymentUseCaseRankingTest {
 		when(ledgerRepositoryPort.save(any(Ledger.class))).thenAnswer(invocation -> invocation.getArgument(0));
 		when(reservationRepositoryPort.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-		// TransactionTemplate Mock 설정
-		// TransactionTemplate.execute()는 내부적으로 transactionManager.getTransaction(TransactionDefinition)을 호출
-		// getTransaction()은 TransactionStatus를 반환해야 하며,
-		// TransactionTemplate.execute()가 실제로 callback.doInTransaction()을 실행함
-		// 따라서 getTransaction()을 mock하여 TransactionStatus를 반환하고,
-		// TransactionTemplate.execute()가 실제로 callback을 실행하도록 함
-		org.springframework.transaction.support.DefaultTransactionStatus transactionStatus = 
+		// paymentEventPublisher.publish 호출 시 랭킹 리스너 동기 실행 (Kafka Consumer 역할 시뮬레이션)
+		doAnswer(invocation -> {
+			PaymentCompletedEvent event = invocation.getArgument(0);
+			rankingEventListener.handlePaymentCompleted(event);
+			return null;
+		}).when(paymentEventPublisher).publish(any(PaymentCompletedEvent.class));
+
+		// TransactionTemplate Mock - getTransaction 시 initSynchronization, commit 시 afterCommit 호출
+		org.springframework.transaction.support.DefaultTransactionStatus transactionStatus =
 				new org.springframework.transaction.support.DefaultTransactionStatus(
 						null, true, false, false, false, null);
-		
-		when(transactionManager.getTransaction(any())).thenReturn(transactionStatus);
+
+		when(transactionManager.getTransaction(any())).thenAnswer(invocation -> {
+			TransactionSynchronizationManager.initSynchronization();
+			return transactionStatus;
+		});
+
+		doAnswer(invocation -> {
+			TransactionSynchronizationManager.getSynchronizations().forEach(sync -> {
+				if (sync instanceof org.springframework.transaction.support.TransactionSynchronization) {
+					((org.springframework.transaction.support.TransactionSynchronization) sync).afterCommit();
+				}
+			});
+			TransactionSynchronizationManager.clearSynchronization();
+			return null;
+		}).when(transactionManager).commit(any());
 	}
 }
