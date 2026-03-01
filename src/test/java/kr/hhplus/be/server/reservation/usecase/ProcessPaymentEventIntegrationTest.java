@@ -12,6 +12,7 @@ import kr.hhplus.be.server.reservation.domain.ReservationStatus;
 import kr.hhplus.be.server.reservation.event.PaymentCompletedEvent;
 import kr.hhplus.be.server.reservation.listener.PaymentDataPlatformEventListener;
 import kr.hhplus.be.server.reservation.listener.PaymentRankingEventListener;
+import kr.hhplus.be.server.reservation.port.EventIdempotencyPort;
 import kr.hhplus.be.server.reservation.port.LedgerRepositoryPort;
 import kr.hhplus.be.server.reservation.port.PaymentRepositoryPort;
 import kr.hhplus.be.server.reservation.port.PaymentEventPublisherPort;
@@ -70,6 +71,9 @@ class ProcessPaymentEventIntegrationTest {
 
 	@Mock
 	private ConcertRankingService concertRankingService;
+
+	@Mock
+	private EventIdempotencyPort eventIdempotencyPort;
 
 	@InjectMocks
 	private ProcessPaymentUseCase processPaymentUseCase;
@@ -186,7 +190,9 @@ class ProcessPaymentEventIntegrationTest {
 	@Test
 	@DisplayName("이벤트 리스너가 매진된 콘서트를 랭킹에 추가함")
 	void testRankingEventListener_AddsSoldOutConcertToRanking() throws InterruptedException {
-		// given
+		// given - 멱등성 체크 통과
+		when(eventIdempotencyPort.tryAcquireProcessing(anyString(), anyString())).thenReturn(true);
+
 		PaymentCompletedEvent event = new PaymentCompletedEvent(
 				this,
 				1L, // paymentId
@@ -221,7 +227,9 @@ class ProcessPaymentEventIntegrationTest {
 	@Test
 	@DisplayName("이벤트 리스너가 데이터 플랫폼 전송을 처리함")
 	void testDataPlatformEventListener_HandlesDataPlatformTransmission() throws InterruptedException {
-		// given
+		// given - 멱등성 체크 통과
+		when(eventIdempotencyPort.tryAcquireProcessing(anyString(), anyString())).thenReturn(true);
+
 		PaymentCompletedEvent event = new PaymentCompletedEvent(
 				this,
 				1L, // paymentId

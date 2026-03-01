@@ -15,8 +15,10 @@ import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,6 +41,8 @@ public class KafkaConfig {
 		config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
 		config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 		config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+		// Idempotent Producer: 중복 발행 방지 (kafka-design.md 8.3절)
+		config.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 		return new DefaultKafkaProducerFactory<>(config);
 	}
 
@@ -65,6 +69,10 @@ public class KafkaConfig {
 		ConcurrentKafkaListenerContainerFactory<String, PaymentCompletedMessage> factory =
 				new ConcurrentKafkaListenerContainerFactory<>();
 		factory.setConsumerFactory(consumerFactory());
+		// 재시도 정책: 최대 3회, Exponential backoff (1s, 2s, 4s) - kafka-design.md 7.1절 참고
+		ExponentialBackOff backOff = new ExponentialBackOff(1000L, 2.0);
+		backOff.setMaxElapsedTime(8000L);  // 1+2+4 = 7초 이내
+		factory.setCommonErrorHandler(new DefaultErrorHandler(backOff));
 		return factory;
 	}
 }

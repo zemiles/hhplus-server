@@ -3,6 +3,7 @@ package kr.hhplus.be.server.reservation.listener;
 import kr.hhplus.be.server.ranking.service.ConcertRankingService;
 import kr.hhplus.be.server.reservation.domain.ReservationStatus;
 import kr.hhplus.be.server.reservation.event.PaymentCompletedEvent;
+import kr.hhplus.be.server.reservation.port.EventIdempotencyPort;
 import kr.hhplus.be.server.reservation.port.ReservationRepositoryPort;
 import kr.hhplus.be.server.reservation.port.SeatRepositoryPort;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +27,12 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "app.event.provider", havingValue = "spring-event")
 public class PaymentRankingEventListener {
 
+	private static final String PROCESSOR_TYPE = "ranking";
+
 	private final SeatRepositoryPort seatRepositoryPort;
 	private final ReservationRepositoryPort reservationRepositoryPort;
 	private final ConcertRankingService concertRankingService;
+	private final EventIdempotencyPort eventIdempotencyPort;
 
 	/**
 	 * 결제 완료 이벤트를 수신하여 랭킹을 업데이트합니다.
@@ -39,6 +43,13 @@ public class PaymentRankingEventListener {
 	@EventListener
 	public void handlePaymentCompleted(PaymentCompletedEvent event) {
 		try {
+			// 멱등성: 중복 이벤트 시 불필요한 DB 조회 방지 (addSoldOutConcert는 DB 기반으로 이미 멱등)
+			if (!eventIdempotencyPort.tryAcquireProcessing(event.getIdempotencyKey(), PROCESSOR_TYPE)) {
+				log.debug("랭킹 업데이트 스킵 (이미 처리됨): paymentId={}, concertScheduleId={}",
+						event.getPaymentId(), event.getConcertScheduleId());
+				return;
+			}
+
 			Long concertScheduleId = event.getConcertScheduleId();
 			
 			// 전체 좌석 개수 조회

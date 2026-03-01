@@ -1,5 +1,6 @@
 package kr.hhplus.be.server.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -17,16 +18,24 @@ import java.util.concurrent.Executor;
 @EnableAsync
 public class SchedulerConfig {
 
+	@Value("${app.async.core-pool-size:5}")
+	private int corePoolSize;
+	@Value("${app.async.max-pool-size:10}")
+	private int maxPoolSize;
+	@Value("${app.async.queue-capacity:100}")
+	private int queueCapacity;
+
 	/**
 	 * 비동기 처리를 위한 ThreadPoolTaskExecutor 설정
 	 * 이벤트 리스너의 비동기 처리를 위해 사용됩니다.
+	 * prod 프로파일: core=10, max=20, queue=500
 	 */
 	@Bean(name = "taskExecutor")
 	public Executor taskExecutor() {
 		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-		executor.setCorePoolSize(5);
-		executor.setMaxPoolSize(10);
-		executor.setQueueCapacity(100);
+		executor.setCorePoolSize(corePoolSize);
+		executor.setMaxPoolSize(maxPoolSize);
+		executor.setQueueCapacity(queueCapacity);
 		executor.setThreadNamePrefix("async-event-");
 		executor.initialize();
 		return executor;

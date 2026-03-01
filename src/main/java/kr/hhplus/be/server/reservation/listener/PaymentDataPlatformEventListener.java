@@ -1,6 +1,7 @@
 package kr.hhplus.be.server.reservation.listener;
 
 import kr.hhplus.be.server.reservation.event.PaymentCompletedEvent;
+import kr.hhplus.be.server.reservation.port.EventIdempotencyPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -26,8 +27,11 @@ import java.util.Map;
 @ConditionalOnProperty(name = "app.event.provider", havingValue = "spring-event")
 public class PaymentDataPlatformEventListener {
 
+	private static final String PROCESSOR_TYPE = "data-platform";
+
 	@SuppressWarnings("unused")
 	private final RestTemplate restTemplate;
+	private final EventIdempotencyPort eventIdempotencyPort;
 	
 	// Mock API 엔드포인트 (실제 운영 환경에서는 설정 파일에서 관리)
 	@SuppressWarnings("unused")
@@ -42,6 +46,13 @@ public class PaymentDataPlatformEventListener {
 	@EventListener
 	public void handlePaymentCompleted(PaymentCompletedEvent event) {
 		try {
+			// 멱등성: 중복 발행/재시도 시 동일 이벤트 중복 전송 방지
+			if (!eventIdempotencyPort.tryAcquireProcessing(event.getIdempotencyKey(), PROCESSOR_TYPE)) {
+				log.debug("데이터 플랫폼 전송 스킵 (이미 처리됨): paymentId={}, idempotencyKey={}",
+						event.getPaymentId(), event.getIdempotencyKey());
+				return;
+			}
+
 			// 데이터 플랫폼에 전송할 데이터 구성
 			Map<String, Object> payload = new HashMap<>();
 			payload.put("paymentId", event.getPaymentId());
@@ -54,23 +65,18 @@ public class PaymentDataPlatformEventListener {
 
 			// Mock API 호출 (실제 운영 환경에서는 실제 데이터 플랫폼 API 호출)
 			// 현재는 Mock이므로 실제 호출하지 않고 로그만 남깁니다.
-			log.info("데이터 플랫폼 전송 (Mock): paymentId={}, reservationId={}, concertScheduleId={}", 
+			log.info("데이터 플랫폼 전송 (Mock): paymentId={}, reservationId={}, concertScheduleId={}",
 					event.getPaymentId(), event.getReservationId(), event.getConcertScheduleId());
 			log.debug("전송 데이터: {}", payload);
 
-			// 실제 API 호출이 필요한 경우 아래 주석을 해제하세요
-			// try {
-			//     restTemplate.postForObject(DATA_PLATFORM_API_URL, payload, String.class);
-			//     log.info("데이터 플랫폼 전송 성공: paymentId={}", event.getPaymentId());
-			// } catch (Exception e) {
-			//     log.error("데이터 플랫폼 전송 실패: paymentId={}", event.getPaymentId(), e);
-			//     // 재시도 로직이나 Dead Letter Queue 처리 등을 고려할 수 있습니다.
-			// }
-
+			// 실제 API 호출 시: sendWithRetry(payload, event.getPaymentId());
+			// - 재시도: 최대 3회, Exponential backoff (1s, 2s, 4s)
+			// - 실패 시: 로그 + (선택) DLQ/재전송 큐에 적재하여 수동 확인
 		} catch (Exception e) {
-			log.error("데이터 플랫폼 전송 처리 중 오류 발생: paymentId={}", 
-					event.getPaymentId(), e);
+			log.error("데이터 플랫폼 전송 처리 중 오류 발생: paymentId={}, idempotencyKey={}",
+					event.getPaymentId(), event.getIdempotencyKey(), e);
 			// 데이터 플랫폼 전송 실패는 치명적이지 않으므로 예외를 다시 던지지 않음
+			// 중요 데이터인 경우: 재전송 큐 적재 또는 상태 마킹 후 수동 확인 권장
 		}
 	}
 }
