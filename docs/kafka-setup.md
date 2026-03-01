@@ -59,3 +59,11 @@ docker-compose -f docker-compose.kafka.yaml down
 
 테스트는 `h2` 프로파일을 사용하며 `app.event.provider=spring-event`로 설정되어 있어  
 Kafka 없이 Spring Event로 동작합니다.
+
+## 7. Kafka E2E 통합 테스트 (Docker 필요)
+
+실제 Kafka 브로커를 사용한 E2E 테스트는 `KafkaPaymentE2EIntegrationTest`에 구현되어 있습니다.
+
+- **실행 조건**: Docker 실행 중
+- **실행 방법**: `./gradlew test -PincludeKafkaE2e`
+- **검증 내용**: Producer 발행 → Broker → Consumer 수신, 직렬화/역직렬화

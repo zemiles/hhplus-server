@@ -1,6 +1,7 @@
 package kr.hhplus.be.server.reservation.listener;
 
 import kr.hhplus.be.server.reservation.event.PaymentCompletedEvent;
+import kr.hhplus.be.server.reservation.port.EventIdempotencyPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -24,6 +26,9 @@ class PaymentDataPlatformEventListenerTest {
 
 	@Mock
 	private org.springframework.web.client.RestTemplate restTemplate;
+
+	@Mock
+	private EventIdempotencyPort eventIdempotencyPort;
 
 	@InjectMocks
 	private PaymentDataPlatformEventListener listener;
@@ -49,6 +54,9 @@ class PaymentDataPlatformEventListenerTest {
 	@Test
 	@DisplayName("결제 완료 이벤트 수신 시 데이터 플랫폼 전송 로그가 기록됨")
 	void testHandlePaymentCompleted_LogsDataPlatformTransmission() throws InterruptedException {
+		// given - 멱등성 체크 통과
+		when(eventIdempotencyPort.tryAcquireProcessing(anyString(), anyString())).thenReturn(true);
+
 		// when
 		listener.handlePaymentCompleted(event);
 
@@ -64,9 +72,8 @@ class PaymentDataPlatformEventListenerTest {
 	@Test
 	@DisplayName("데이터 플랫폼 전송 실패 시 예외를 던지지 않음")
 	void testHandlePaymentCompleted_WhenTransmissionFails_DoesNotThrowException() throws InterruptedException {
-		// given
-		// RestTemplate이 null이거나 예외가 발생해도 예외를 던지지 않아야 함
-		// 현재는 Mock API이므로 실제 호출이 없지만, 예외 처리 로직을 검증
+		// given - 멱등성 체크 통과
+		when(eventIdempotencyPort.tryAcquireProcessing(anyString(), anyString())).thenReturn(true);
 
 		// when & then - 예외가 발생하지 않아야 함
 		listener.handlePaymentCompleted(event);

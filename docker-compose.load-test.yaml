@@ -1,0 +1,55 @@
+# 부하 테스트용 Docker Compose
+# 애플리케이션에 CPU/Memory 제한을 적용하여 배포 스펙 실험
+#
+# 실행: docker-compose -f docker-compose.yml -f docker-compose.load-test.yaml up -d
+# 또는: docker-compose -f docker-compose.load-test.yaml up -d (mysql, redis 포함)
+
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=local
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/hhplus?characterEncoding=UTF-8&serverTimezone=UTC
+      - SPRING_DATASOURCE_USERNAME=application
+      - SPRING_DATASOURCE_PASSWORD=application
+      - SPRING_DATA_REDIS_HOST=redis
+      - APP_EVENT_PROVIDER=spring-event
+    depends_on:
+      - mysql
+      - redis
+    # 리소스 제한 실험: 아래 주석 해제 후 값 조절
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_USER=application
+      - MYSQL_PASSWORD=application
+      - MYSQL_DATABASE=hhplus
+    volumes:
+      - ./data/mysql/:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes

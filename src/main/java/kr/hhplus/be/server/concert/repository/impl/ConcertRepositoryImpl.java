@@ -27,16 +27,19 @@ public class ConcertRepositoryImpl implements ConcertCustomRepository {
 
 	@Override
 	public List<ConcertResponse> findConcertDate(Long concertId) {
+		// Seat → ConcertSchedule → Concert 방향 조인 (정상적인 관계 경로)
+		// from(qSeat) 기준으로 예약 가능한 좌석이 있는 일정만 조회
 		return jpaQueryFactory.select(Projections.constructor(ConcertResponse.class,
 					qConcert.id,
 					qConcert.concertName,
-				    qConcert.concertStatus,
-				    qConcertSchedule.concertDate,
-				    qConcertSchedule.concertTime
-				)).from(qConcert)
+					qConcert.concertStatus,
+					qConcertSchedule.concertDate,
+					qConcertSchedule.concertTime
+				)).from(qSeat)
 				.join(qSeat.concertSchedule, qConcertSchedule)
 				.join(qConcertSchedule.concert, qConcert)
 				.where(qConcert.id.eq(concertId).and(qSeat.seatStatus.eq(SeatStatus.NON_RESERVATION)))
+				.distinct()
 				.fetch();
 	}
 }

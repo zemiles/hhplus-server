@@ -2,6 +2,7 @@ package kr.hhplus.be.server.reservation.usecase;
 
 import kr.hhplus.be.server.common.service.DistributedLockService;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import kr.hhplus.be.server.point.domain.Ledger;
@@ -162,35 +163,29 @@ public class ProcessPaymentUseCase {
 		// 10. 결제 완료 이벤트 발행 (트랜잭션 커밋 후 처리)
 		// 트랜잭션 커밋 후 이벤트를 발행하여 랭킹 업데이트와 데이터 플랫폼 전송이
 		// 트랜잭션과 분리되어 비동기로 처리되도록 합니다.
-		// 내부 클래스에서 사용하기 위해 final 변수로 복사
-		final Long finalPaymentId = payment.getId();
-		final Long finalUserId = payment.getUserId();
-		final Long finalReservationId = payment.getReservationId();
-		final Long finalConcertScheduleId = reservation.getConcertSchedule().getConcertScheduleId();
-		final BigDecimal finalTotalAmountCents = payment.getTotalAmountCents();
-		final String finalIdempotencyKeyForEvent = payment.getIdempotencyKey();
-		final Long finalReservationIdForLog = reservationId;
-		
-		// 트랜잭션 커밋 후 Kafka로 이벤트 발행 (랭킹, 데이터 플랫폼 Consumer가 구독)
-		TransactionSynchronizationManager.registerSynchronization(
-			new org.springframework.transaction.support.TransactionSynchronizationAdapter() {
-				@Override
-				public void afterCommit() {
-					PaymentCompletedEvent event = new PaymentCompletedEvent(
-						this,
-						finalPaymentId,
-						finalUserId,
-						finalReservationId,
-						finalConcertScheduleId,
-						finalTotalAmountCents,
-						finalIdempotencyKeyForEvent
-					);
-					paymentEventPublisher.publish(event);
-					log.debug("결제 완료 이벤트 발행 (Kafka): paymentId={}, reservationId={}",
-							finalPaymentId, finalReservationIdForLog);
-				}
-			}
-		);
+		// 트랜잭션 경계 내부에서만 동기화 등록 (isSynchronizationActive 체크로 안정성 확보)
+		if (TransactionSynchronizationManager.isSynchronizationActive()) {
+			final Long finalPaymentId = payment.getId();
+			final Long finalUserId = payment.getUserId();
+			final Long finalReservationId = payment.getReservationId();
+			final Long finalConcertScheduleId = reservation.getConcertSchedule().getConcertScheduleId();
+			final BigDecimal finalTotalAmountCents = payment.getTotalAmountCents();
+			final String finalIdempotencyKeyForEvent = payment.getIdempotencyKey();
+			final Long finalReservationIdForLog = reservationId;
+
+			TransactionSynchronizationManager.registerSynchronization(
+				new PaymentCompletedEventSynchronization(
+					paymentEventPublisher,
+					finalPaymentId,
+					finalUserId,
+					finalReservationId,
+					finalConcertScheduleId,
+					finalTotalAmountCents,
+					finalIdempotencyKeyForEvent,
+					finalReservationIdForLog
+				)
+			);
+		}
 
 		return payment;
 	}

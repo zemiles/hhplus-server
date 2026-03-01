@@ -1,3 +1,9 @@
+app:
+  async:
+    core-pool-size: 5
+    max-pool-size: 10
+    queue-capacity: 100
+
 spring:
   application:
     name: hhplus
@@ -61,6 +67,33 @@ spring:
       host: localhost
       port: 6379
 
+
+---
+spring.config.activate.on-profile: prod
+
+# 운영 환경: 부하 테스트 기반 병목 개선 설정
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 20        # 기본 3 → 20 (동시 예약/결제 트래픽 대응)
+      minimum-idle: 5
+      connection-timeout: 10000
+      max-lifetime: 60000
+      idle-timeout: 300000
+  data:
+    redis:
+      lettuce:
+        pool:
+          max-active: 32           # 기본 8 → 32 (분산락/랭킹/멱등성 동시 접근)
+          max-idle: 16
+          min-idle: 4
+
+# TaskExecutor: prod에서 core=10, max=20, queue=500 적용
+app:
+  async:
+    core-pool-size: 10
+    max-pool-size: 20
+    queue-capacity: 500
 
 ---
 spring.config.activate.on-profile: h2

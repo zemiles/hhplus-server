@@ -3,6 +3,7 @@ package kr.hhplus.be.server.reservation.listener;
 import kr.hhplus.be.server.ranking.service.ConcertRankingService;
 import kr.hhplus.be.server.reservation.domain.ReservationStatus;
 import kr.hhplus.be.server.reservation.event.PaymentCompletedEvent;
+import kr.hhplus.be.server.reservation.port.EventIdempotencyPort;
 import kr.hhplus.be.server.reservation.port.ReservationRepositoryPort;
 import kr.hhplus.be.server.reservation.port.SeatRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -34,6 +36,9 @@ class PaymentRankingEventListenerTest {
 
 	@Mock
 	private ConcertRankingService concertRankingService;
+
+	@Mock
+	private EventIdempotencyPort eventIdempotencyPort;
 
 	@InjectMocks
 	private PaymentRankingEventListener listener;
@@ -62,6 +67,7 @@ class PaymentRankingEventListenerTest {
 	@DisplayName("매진된 콘서트는 랭킹에 추가됨")
 	void testHandlePaymentCompleted_WhenSoldOut_AddsToRanking() throws InterruptedException {
 		// given
+		when(eventIdempotencyPort.tryAcquireProcessing(anyString(), anyString())).thenReturn(true);
 		long totalSeats = 100L;
 		long paidReservations = 100L; // 매진
 
@@ -87,6 +93,7 @@ class PaymentRankingEventListenerTest {
 	@DisplayName("매진되지 않은 콘서트는 랭킹에 추가되지 않음")
 	void testHandlePaymentCompleted_WhenNotSoldOut_DoesNotAddToRanking() throws InterruptedException {
 		// given
+		when(eventIdempotencyPort.tryAcquireProcessing(anyString(), anyString())).thenReturn(true);
 		long totalSeats = 100L;
 		long paidReservations = 50L; // 매진 아님
 
@@ -112,6 +119,7 @@ class PaymentRankingEventListenerTest {
 	@DisplayName("좌석이 없으면 매진 확인을 하지 않음")
 	void testHandlePaymentCompleted_WhenNoSeats_DoesNotCheckSoldOut() throws InterruptedException {
 		// given
+		when(eventIdempotencyPort.tryAcquireProcessing(anyString(), anyString())).thenReturn(true);
 		when(seatRepositoryPort.countByConcertScheduleId(concertScheduleId)).thenReturn(0L);
 
 		// when
@@ -130,6 +138,7 @@ class PaymentRankingEventListenerTest {
 	@DisplayName("랭킹 업데이트 실패 시 예외를 던지지 않음")
 	void testHandlePaymentCompleted_WhenRankingUpdateFails_DoesNotThrowException() throws InterruptedException {
 		// given
+		when(eventIdempotencyPort.tryAcquireProcessing(anyString(), anyString())).thenReturn(true);
 		long totalSeats = 100L;
 		long paidReservations = 100L;
 
@@ -147,5 +156,22 @@ class PaymentRankingEventListenerTest {
 		Thread.sleep(100);
 
 		verify(concertRankingService).addSoldOutConcert(concertScheduleId);
+	}
+
+	@Test
+	@DisplayName("이미 처리된 이벤트(idempotency)는 스킵하고 DB 조회하지 않음")
+	void testHandlePaymentCompleted_WhenAlreadyProcessed_SkipsProcessing() throws InterruptedException {
+		// given - 멱등성 체크: 이미 처리됨 (false 반환)
+		when(eventIdempotencyPort.tryAcquireProcessing(anyString(), anyString())).thenReturn(false);
+
+		// when
+		listener.handlePaymentCompleted(event);
+
+		Thread.sleep(100);
+
+		// then - DB 조회 및 랭킹 업데이트 없음
+		verify(seatRepositoryPort, never()).countByConcertScheduleId(anyLong());
+		verify(reservationRepositoryPort, never()).countByConcertScheduleIdAndStatus(anyLong(), any());
+		verify(concertRankingService, never()).addSoldOutConcert(anyLong());
 	}
 }

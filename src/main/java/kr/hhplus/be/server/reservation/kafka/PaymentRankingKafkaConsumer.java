@@ -3,6 +3,7 @@ package kr.hhplus.be.server.reservation.kafka;
 import kr.hhplus.be.server.ranking.service.ConcertRankingService;
 import kr.hhplus.be.server.reservation.domain.ReservationStatus;
 import kr.hhplus.be.server.reservation.event.PaymentCompletedMessage;
+import kr.hhplus.be.server.reservation.port.EventIdempotencyPort;
 import kr.hhplus.be.server.reservation.port.ReservationRepositoryPort;
 import kr.hhplus.be.server.reservation.port.SeatRepositoryPort;
 import lombok.RequiredArgsConstructor;
@@ -22,9 +23,12 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "app.event.provider", havingValue = "kafka", matchIfMissing = true)
 public class PaymentRankingKafkaConsumer {
 
+	private static final String PROCESSOR_TYPE = "ranking";
+
 	private final SeatRepositoryPort seatRepositoryPort;
 	private final ReservationRepositoryPort reservationRepositoryPort;
 	private final ConcertRankingService concertRankingService;
+	private final EventIdempotencyPort eventIdempotencyPort;
 
 	@KafkaListener(
 			topics = "${spring.kafka.topic.payment-completed:payment-completed}",
@@ -32,6 +36,13 @@ public class PaymentRankingKafkaConsumer {
 	)
 	public void consume(PaymentCompletedMessage message) {
 		try {
+			// 멱등성: Kafka 재시도 시 중복 처리 방지
+			if (!eventIdempotencyPort.tryAcquireProcessing(message.getIdempotencyKey(), PROCESSOR_TYPE)) {
+				log.debug("랭킹 업데이트 스킵 (이미 처리됨): paymentId={}, concertScheduleId={}",
+						message.getPaymentId(), message.getConcertScheduleId());
+				return;
+			}
+
 			Long concertScheduleId = message.getConcertScheduleId();
 
 			long totalSeats = seatRepositoryPort.countByConcertScheduleId(concertScheduleId);

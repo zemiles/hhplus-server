@@ -62,6 +62,7 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
 	testImplementation("org.testcontainers:junit-jupiter")
 	testImplementation("org.testcontainers:mysql")
+	testImplementation("org.testcontainers:kafka")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -86,7 +87,12 @@ tasks.named<Delete>("clean") {
 }
 
 tasks.withType<Test> {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		// kafka-e2e 태그 테스트는 Docker 필요 - 기본 빌드에서 제외 (Docker 있을 때: ./gradlew test -PincludeKafkaE2e)
+		if (!project.hasProperty("includeKafkaE2e")) {
+			excludeTags("kafka-e2e")
+		}
+	}
 	systemProperty("user.timezone", "UTC")
 	// 윈도우 환경에서 인코딩 문제 방지
 	systemProperty("file.encoding", "UTF-8")

@@ -131,7 +131,101 @@
 
 ---
 
-## 7. 참고
+## 7. 소비자 장애·중복 처리 정책
+
+### 7.1 재시도 정책
+
+| 항목 | 설정값 | 설명 |
+|------|--------|------|
+| 최대 재시도 횟수 | 3회 | Consumer 처리 실패 시 최대 3회 재시도 |
+| Backoff | Exponential (1s, 2s, 4s) | 재시도 간격을 지수적으로 증가 |
+| 재시도 대상 | 일시적 오류 (DB 연결 끊김, 네트워크 타임아웃 등) | 영구적 오류는 DLQ로 이동 |
+
+### 7.2 Dead Letter Queue (DLQ)
+
+- **토픽**: `payment-completed-dlq`
+- **이동 조건**: 최대 재시도 횟수 초과 시
+- **처리**: DLQ 메시지는 수동 검토 후 재처리 또는 폐기
+- **메타데이터**: 원본 메시지 + 실패 원인 + 타임스탬프 보존
+
+### 7.3 멱등성(Idempotency) 활용
+
+- **Producer**: `Idempotency-Key`로 결제 API 멱등성 보장 (중복 결제 방지)
+- **Consumer**: `idempotencyKey`를 메시지에 포함하여 데이터 플랫폼 전송 시 중복 전송 방지
+- **랭킹 Consumer**: `concertScheduleId` 기준 매진 여부를 DB에서 재조회하여 중복 랭킹 추가 방지
+
+---
+
+## 8. 파티셔닝·키 전략 및 운영
+
+### 8.1 파티션 키 전략
+
+| 토픽 | 파티션 키 | 목적 |
+|------|-----------|------|
+| payment-completed | reservationId | 동일 예약의 이벤트 순서 보장 |
+
+### 8.2 토픽별 설정
+
+| 토픽 | 파티션 수 | Replication | 향후 파티션 증가 |
+|------|-----------|-------------|------------------|
+| payment-completed | 3 | 1 (로컬) / 3 (운영) | 트래픽 증가 시 파티션 수만 증가 가능. 리밸런싱 시 Consumer 일시 중단 발생하므로 유지보수 시간대에 수행 권장 |
+
+### 8.3 운영·회복 전략
+
+- **Idempotent Producer**: `enable.idempotence=true` (중복 발행 방지)
+- **Consumer-side Idempotency**: 처리 전 `idempotencyKey`로 이미 처리 여부 확인
+- **DLQ 정책**: 재시도 실패 메시지는 DLQ로 격리 후 수동 처리
+
+---
+
+## 9. 쿠폰 발급 시나리오 (이커머스 확장 예시)
+
+> 결제/예약/랭킹 외, Kafka를 활용할 수 있는 **쿠폰 발급** 시나리오를 설계합니다.
+
+### 9.1 시나리오 개요
+
+- **트리거**: 결제 완료 시 쿠폰 자동 발급 (예: 첫 결제 시 10% 할인 쿠폰)
+- **Producer**: 결제 완료 이벤트와 동일한 `payment-completed` 토픽 또는 별도 `coupon-issue-request` 토픽
+- **Consumer**: 쿠폰 발급 서비스가 구독하여 발급 처리
+
+### 9.2 메시지 스키마 예시 (CouponIssueRequestMessage)
+
+```json
+{
+  "requestId": "uuid",
+  "userId": 100,
+  "orderId": 1001,
+  "couponType": "FIRST_PURCHASE_10",
+  "idempotencyKey": "coupon-user100-order1001",
+  "timestamp": 1709123456789
+}
+```
+
+### 9.3 멱등성 (중복 발급 방지)
+
+| 전략 | 구현 |
+|------|------|
+| 메시지 키 | `idempotencyKey` (userId + orderId + couponType 조합) |
+| Consumer 처리 | 발급 전 DB에서 `idempotencyKey`로 이미 발급 여부 조회 |
+| 중복 시 | 이미 발급된 경우 스킵 후 offset 커밋 (재처리 방지) |
+
+### 9.4 소비자 그룹 설계
+
+| Consumer Group | 역할 | 처리 내용 |
+|----------------|------|-----------|
+| coupon-issue-consumer-group | 쿠폰 발급 | DB에 쿠폰 발급 기록, 사용자 쿠폰함 업데이트 |
+| coupon-statistics-consumer-group | 통계 | 발급 건수 집계, 대시보드용 |
+| coupon-notification-consumer-group | 알림 | 발급 완료 푸시/이메일 발송 |
+
+### 9.5 오류 재시도·중복 방지 전략
+
+- **재시도**: 3회, Exponential backoff (1s, 2s, 4s)
+- **DLQ**: `coupon-issue-dlq` — 재시도 실패 시 격리
+- **중복 방지**: `idempotencyKey`로 발급 이력 조회 후 스킵
+
+---
+
+## 10. 참고
 
 - Kafka 기초 개념: [kafka-intro.md](./kafka-intro.md)
 - Docker Compose: `docker-compose.kafka.yaml`
